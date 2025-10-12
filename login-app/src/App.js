@@ -157,6 +157,9 @@ export class App {
     
     // Initialize KIR Profile component
     await this.kirProfile.init(kirId, tab);
+    
+    // Make sure the global kirProfile instance is updated with the current instance
+    window.kirProfile = this.kirProfile;
   }
 
 

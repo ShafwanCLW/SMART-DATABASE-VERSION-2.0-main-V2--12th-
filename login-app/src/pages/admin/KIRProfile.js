@@ -3,8 +3,6 @@ import { KIRService } from '../../services/backend/KIRService.js';
 import { AIRService } from '../../services/backend/AIRService.js';
 import { PasanganService } from '../../services/backend/PasanganService.js';
 import { ProgramService } from '../../services/backend/ProgramService.js';
-import { DokumenService } from '../../services/backend/DokumenService.js';
-import { AuditService } from '../../services/backend/AuditService.js';
 
 export class KIRProfile {
   constructor() {
@@ -13,17 +11,14 @@ export class KIRProfile {
     this.relatedData = null;
     this.currentTab = 'maklumat-asas';
     this.dirtyTabs = new Set();
-    this.expandedParentTabs = new Set(); // Track expanded parent tabs
     this.isLoading = false;
-    this.validTabs = ['maklumat-asas', 'kafa', 'pendidikan', 'pekerjaan', 'kekeluargaan', 'kesihatan', 'pendapatan', 'perbelanjaan', 'bantuan-bulanan', 'air', 'pkir', 'program', 'dokumen', 'audit'];
+    this.validTabs = ['maklumat-asas', 'kafa', 'pendidikan', 'pekerjaan', 'kekeluargaan', 'kesihatan', 'pendapatan', 'perbelanjaan', 'bantuan-bulanan', 'air', 'pkir', 'program'];
     
     // Initialize services
     this.kirService = KIRService;
     this.airService = AIRService;
     this.pasanganService = PasanganService;
     this.programService = ProgramService;
-    this.dokumenService = DokumenService;
-    this.auditService = AuditService;
     
     // Initialize financial data arrays
     this.pendapatanData = [];
@@ -42,14 +37,14 @@ export class KIRProfile {
     this.pkirData = null;
     this.currentPKIRSection = 'maklumat-asas';
     this.pkirDirtyTabs = new Set();
-    this.validPKIRSections = ['maklumat-asas', 'kafa', 'pendidikan', 'pekerjaan', 'kesihatan', 'dokumen'];
+    this.validPKIRSections = ['maklumat-asas', 'kafa', 'pendidikan', 'pekerjaan', 'kesihatan'];
     this.isPKIRModalOpen = false;
     this.duplicateKIRWarning = null;
     
     // Kesihatan KIR-related properties
     this.currentKesihatanSection = 'ringkasan';
     this.kesihatanDirtyTabs = new Set();
-    this.validKesihatanSections = ['ringkasan', 'ubat-tetap', 'rawatan', 'pembedahan', 'dokumen'];
+    this.validKesihatanSections = ['ringkasan', 'ubat-tetap', 'rawatan', 'pembedahan'];
   }
 
   // Initialize KIR Profile with kirId and optional tab
@@ -82,6 +77,12 @@ export class KIRProfile {
 
   // Update URL with current tab
   updateURL() {
+    // Ensure kirId is preserved and valid
+    if (!this.kirId || this.kirId === 'null' || this.kirId === 'undefined') {
+      console.error('Cannot update URL: Invalid KIR ID', this.kirId);
+      return;
+    }
+    
     const url = `/admin/kir/${this.kirId}?tab=${this.currentTab}`;
     window.history.replaceState(null, '', `#${url}`);
   }
@@ -92,26 +93,28 @@ export class KIRProfile {
       this.isLoading = true;
       this.showLoadingState();
       
-      // Load main KIR data and related documents
-      const [kirData, relatedData] = await Promise.all([
-        KIRService.getKIRById(this.kirId),
-        KIRService.getRelatedDocuments(this.kirId)
-      ]);
+      // Load main KIR data (which already includes related documents)
+      const kirDataWithRelated = await KIRService.getKIRById(this.kirId);
       
-      // Debug logging to understand data loading issues
-      console.log('=== KIR Profile Data Loading Debug ===');
-      console.log('KIR ID:', this.kirId);
-      console.log('Main KIR Data:', kirData);
-      console.log('KIR Status:', kirData?.status_rekod || 'undefined');
-      console.log('Related Data:', relatedData);
-      console.log('Related Data Keys:', relatedData ? Object.keys(relatedData) : 'null');
-      if (relatedData) {
-        console.log('KAFA Data:', relatedData.kafa);
-        console.log('Pendidikan Data:', relatedData.pendidikan);
-        console.log('Pekerjaan Data:', relatedData.pekerjaan);
-        console.log('Kesihatan Data:', relatedData.kesihatan);
+      if (!kirDataWithRelated) {
+        this.showNotFoundState();
+        return;
       }
-      console.log('=== End Debug ===');
+      
+      // Extract related data from the combined response (handle undefined/null values)
+      const relatedData = {
+        kafa: kirDataWithRelated.kafa || {},
+        pendidikan: kirDataWithRelated.pendidikan || {},
+        pekerjaan: kirDataWithRelated.pekerjaan || {},
+        kesihatan: kirDataWithRelated.kesihatan || {}
+      };
+      
+      // Extract main KIR data (remove related data properties)
+      const kirData = { ...kirDataWithRelated };
+      delete kirData.kafa;
+      delete kirData.pendidikan;
+      delete kirData.pekerjaan;
+      delete kirData.kesihatan;
       
       // Load AIR data and PKIR data
       const [airData, pkirData] = await Promise.all([
@@ -119,15 +122,13 @@ export class KIRProfile {
         this.loadPKIRData()
       ]);
       
-      if (!kirData) {
-        this.showNotFoundState();
-        return;
-      }
-      
       this.kirData = kirData;
       this.relatedData = relatedData;
       this.airData = airData || [];
       this.pkirData = pkirData;
+      
+      // Render the UI with loaded data
+      this.render();
       
     } catch (error) {
       console.error('Error loading KIR data:', error);
@@ -295,85 +296,32 @@ export class KIRProfile {
       { id: 'kafa', label: 'Pendidikan Agama (KAFA)', icon: 'fas fa-mosque' },
       { id: 'pendidikan', label: 'Pendidikan', icon: 'fas fa-graduation-cap' },
       { id: 'pekerjaan', label: 'Pekerjaan', icon: 'fas fa-briefcase' },
+      { id: 'kekeluargaan', label: 'Kekeluargaan', icon: 'fas fa-users' },
       { id: 'kesihatan', label: 'Kesihatan KIR', icon: 'fas fa-heartbeat' },
-      { 
-        id: 'ekonomi', 
-        label: 'Ekonomi', 
-        icon: 'fas fa-chart-line',
-        isParent: true,
-        subTabs: [
-          { id: 'pendapatan', label: 'Pendapatan', icon: 'fas fa-coins' },
-          { id: 'perbelanjaan', label: 'Perbelanjaan', icon: 'fas fa-shopping-cart' },
-          { id: 'bantuan-bulanan', label: 'Bantuan Bulanan', icon: 'fas fa-hand-holding-usd' }
-        ]
-      },
+      { id: 'pendapatan', label: 'Pendapatan', icon: 'fas fa-coins' },
+      { id: 'perbelanjaan', label: 'Perbelanjaan', icon: 'fas fa-shopping-cart' },
+      { id: 'bantuan-bulanan', label: 'Bantuan Bulanan', icon: 'fas fa-hand-holding-usd' },
       { id: 'air', label: 'Ahli Isi Rumah (AIR)', icon: 'fas fa-home' },
       { id: 'pkir', label: 'PKIR (Pasangan Ketua Isi Rumah)', icon: 'fas fa-heart' },
-      { id: 'program', label: 'Program & Kehadiran', icon: 'fas fa-calendar-check' },
-      { id: 'dokumen', label: 'Dokumen', icon: 'fas fa-file-alt' },
-      { id: 'audit', label: 'Audit Trail', icon: 'fas fa-history' }
+      { id: 'program', label: 'Program & Kehadiran', icon: 'fas fa-calendar-check' }
     ];
     
     const tabsHTML = tabs.map(tab => {
-      if (tab.isParent) {
-        // Handle parent tab with sub-tabs
-        const isEkonomiActive = ['pendapatan', 'perbelanjaan', 'bantuan-bulanan'].includes(this.currentTab);
-        const isExpanded = isEkonomiActive || this.expandedParentTabs?.has('ekonomi');
-        const hasEkonomiDirty = tab.subTabs.some(subTab => this.dirtyTabs.has(subTab.id));
-        
-        const subTabsHTML = tab.subTabs.map(subTab => {
-          const isSubActive = subTab.id === this.currentTab;
-          const isSubDirty = this.dirtyTabs.has(subTab.id);
-          
-          return `
-            <button class="sub-tab-btn ${isSubActive ? 'active' : ''}" 
-                    data-tab="${subTab.id}" 
-                    onclick="kirProfile.switchTab('${subTab.id}')">
-              <div class="tab-icon">
-                <i class="${subTab.icon}"></i>
-              </div>
-              <span>${subTab.label}</span>
-              ${isSubDirty ? '<span class="dirty-indicator">•</span>' : ''}
-            </button>
-          `;
-        }).join('');
-        
-        return `
-          <div class="parent-tab-container">
-            <button class="tab-btn parent-tab ${isEkonomiActive ? 'active' : ''}" 
-                    data-tab="${tab.id}" 
-                    onclick="kirProfile.toggleEkonomiTab()">
-              <div class="tab-icon">
-                <i class="${tab.icon}"></i>
-              </div>
-              <span>${tab.label}</span>
-              <div class="expand-icon">
-                <i class="fas fa-chevron-${isExpanded ? 'down' : 'right'}"></i>
-              </div>
-              ${hasEkonomiDirty ? '<span class="dirty-indicator">•</span>' : ''}
-            </button>
-            <div class="sub-tabs ${isExpanded ? 'expanded' : 'collapsed'}">
-              ${subTabsHTML}
-            </div>
+      // Handle regular tabs
+      const isActive = tab.id === this.currentTab;
+      const isDirty = this.dirtyTabs.has(tab.id);
+      
+      return `
+        <button class="tab-btn ${isActive ? 'active' : ''}" 
+                data-tab="${tab.id}" 
+                onclick="kirProfile.switchTab('${tab.id}')">
+          <div class="tab-icon">
+            <i class="${tab.icon}"></i>
           </div>
-        `;
-      } else {
-        // Handle regular tabs
-        const isActive = tab.id === this.currentTab;
-        const isDirty = this.dirtyTabs.has(tab.id);
-        
-        return `
-          <button class="tab-btn ${isActive ? 'active' : ''}" 
-                  data-tab="${tab.id}" 
-                  onclick="kirProfile.switchTab('${tab.id}')">
-            <div class="tab-icon">
-              <i class="${tab.icon}"></i>
-            </div>
-            <span>${tab.label}</span>
-            ${isDirty ? '<span class="dirty-indicator">•</span>' : ''}
-          </button>
-        `;
-      }
+          <span>${tab.label}</span>
+          ${isDirty ? '<span class="dirty-indicator">•</span>' : ''}
+        </button>
+      `;
     }).join('');
     
     return `
@@ -408,6 +356,8 @@ export class KIRProfile {
         return this.createPendidikanTab();
       case 'pekerjaan':
         return this.createPekerjaanTab();
+      case 'kekeluargaan':
+        return this.createKekeluargaanTab();
       case 'kesihatan':
         return this.createKesihatanTab();
       case 'pendapatan':
@@ -422,10 +372,6 @@ export class KIRProfile {
         return this.createPKIRTab();
       case 'program':
         return this.createProgramTab();
-      case 'dokumen':
-        return this.createDokumenTab();
-      case 'audit':
-        return this.createAuditTab();
       default:
         return '<p>Tab tidak dijumpai</p>';
     }
@@ -576,40 +522,6 @@ export class KIRProfile {
             <div class="form-group">
               <label for="tempat_lahir">Tempat Lahir</label>
               <input type="text" id="tempat_lahir" name="tempat_lahir" value="${data.tempat_lahir || ''}">
-            </div>
-          </div>
-        </div>
-        
-        <div class="form-section">
-          <div class="form-group">
-            <label for="senarai_adik_beradik">Senarai Adik Beradik</label>
-            <div id="siblings-container">
-              ${this.createSiblingsHTML(data.senarai_adik_beradik || [])}
-            </div>
-            <button type="button" class="btn btn-secondary" onclick="kirProfile.addSibling()">Tambah Adik Beradik</button>
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group">
-              <label for="ibu_nama">Nama Ibu</label>
-              <input type="text" id="ibu_nama" name="ibu_nama" value="${data.ibu_nama || ''}">
-            </div>
-            
-            <div class="form-group">
-              <label for="ibu_negeri">Negeri Ibu</label>
-              <input type="text" id="ibu_negeri" name="ibu_negeri" value="${data.ibu_negeri || ''}">
-            </div>
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group">
-              <label for="ayah_nama">Nama Ayah</label>
-              <input type="text" id="ayah_nama" name="ayah_nama" value="${data.ayah_nama || ''}">
-            </div>
-            
-            <div class="form-group">
-              <label for="ayah_negeri">Negeri Ayah</label>
-              <input type="text" id="ayah_negeri" name="ayah_negeri" value="${data.ayah_negeri || ''}">
             </div>
           </div>
         </div>
@@ -930,6 +842,38 @@ export class KIRProfile {
             <label for="pasangan_status">Status Pasangan</label>
             <input type="text" id="pasangan_status" name="pasangan_status" value="${data.pasangan_status || ''}">
           </div>
+          
+          <div class="form-group">
+            <label for="senarai_adik_beradik">Senarai Adik Beradik</label>
+            <div id="siblings-container">
+              ${this.createSiblingsHTML(data.senarai_adik_beradik || [])}
+            </div>
+            <button type="button" class="btn btn-secondary" onclick="kirProfile.addSibling()">Tambah Adik Beradik</button>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="ibu_nama">Nama Ibu</label>
+              <input type="text" id="ibu_nama" name="ibu_nama" value="${data.ibu_nama || ''}">
+            </div>
+            
+            <div class="form-group">
+              <label for="ibu_negeri">Negeri Ibu</label>
+              <input type="text" id="ibu_negeri" name="ibu_negeri" value="${data.ibu_negeri || ''}">
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="ayah_nama">Nama Ayah</label>
+              <input type="text" id="ayah_nama" name="ayah_nama" value="${data.ayah_nama || ''}">
+            </div>
+            
+            <div class="form-group">
+              <label for="ayah_negeri">Negeri Ayah</label>
+              <input type="text" id="ayah_negeri" name="ayah_negeri" value="${data.ayah_negeri || ''}">
+            </div>
+          </div>
         </div>
         
         <!-- PKIR Integration Panel -->
@@ -994,8 +938,7 @@ export class KIRProfile {
       { id: 'ringkasan', label: 'Ringkasan Kesihatan', icon: 'heart' },
       { id: 'ubat-tetap', label: 'Ubat-ubatan Tetap', icon: 'pills' },
       { id: 'rawatan', label: 'Rawatan / Follow-up Berkala', icon: 'calendar-check' },
-      { id: 'pembedahan', label: 'Sejarah Pembedahan', icon: 'cut' },
-      { id: 'dokumen', label: 'Lampiran Perubatan', icon: 'file-medical' }
+      { id: 'pembedahan', label: 'Sejarah Pembedahan', icon: 'cut' }
     ];
 
     const sectionsHTML = sections.map(section => {
@@ -1031,8 +974,6 @@ export class KIRProfile {
         return this.createRawatanSection();
       case 'pembedahan':
         return this.createPembedahanSection();
-      case 'dokumen':
-        return this.createDokumenKesihatanSection();
       default:
         return this.createRingkasanKesihatanSection();
     }
@@ -1351,72 +1292,6 @@ export class KIRProfile {
     `;
   }
 
-  // Create Dokumen Kesihatan section
-  createDokumenKesihatanSection() {
-    const data = this.relatedData?.kesihatan?.dokumen || [];
-    
-    if (data.length === 0) {
-      return `
-        <div class="empty-state">
-          <div class="empty-state-icon">
-            <i class="fas fa-file-medical"></i>
-          </div>
-          <h4>Tiada Lampiran Perubatan</h4>
-          <p>Belum ada dokumen perubatan yang dimuat naik.</p>
-          <div class="file-upload-area" onclick="document.getElementById('kesihatan-file-input').click()">
-            <i class="fas fa-cloud-upload-alt"></i>
-            <p>Klik untuk memuat naik dokumen pertama</p>
-            <small>Format yang diterima: PDF, JPG, PNG (Maksimum 5MB)</small>
-          </div>
-          <input type="file" id="kesihatan-file-input" accept=".pdf,.jpg,.jpeg,.png" style="display: none" onchange="kirProfile.uploadKesihatanDokumen(this)">
-        </div>
-      `;
-    }
-    
-    const fileList = data.map((file, index) => `
-      <div class="file-item">
-        <div class="file-icon">
-          <i class="fas fa-${this.getFileIcon(file.nama_file)}"></i>
-        </div>
-        <div class="file-info">
-          <div class="file-name">${file.nama_file}</div>
-          <div class="file-meta">
-            <span class="file-size">${this.formatFileSize(file.saiz_file)}</span>
-            <span class="file-date">${file.tarikh_muat_naik ? new Date(file.tarikh_muat_naik).toLocaleDateString('ms-MY') : ''}</span>
-          </div>
-        </div>
-        <div class="file-actions">
-          <button class="btn btn-sm btn-secondary" onclick="kirProfile.downloadKesihatanDokumen(${index})">
-            <i class="fas fa-download"></i>
-          </button>
-          <button class="btn btn-sm btn-danger" onclick="kirProfile.deleteKesihatanDokumen(${index})">
-            <i class="fas fa-trash"></i>
-          </button>
-        </div>
-      </div>
-    `).join('');
-    
-    return `
-      <div class="section-header">
-        <h4>Lampiran Perubatan</h4>
-        <button class="btn btn-primary" onclick="document.getElementById('kesihatan-file-input').click()">
-          <i class="fas fa-plus"></i> Tambah Dokumen
-        </button>
-      </div>
-      
-      <div class="file-upload-area" onclick="document.getElementById('kesihatan-file-input').click()">
-        <i class="fas fa-cloud-upload-alt"></i>
-        <p>Klik untuk memuat naik dokumen</p>
-        <small>Format yang diterima: PDF, JPG, PNG (Maksimum 5MB)</small>
-      </div>
-      <input type="file" id="kesihatan-file-input" accept=".pdf,.jpg,.jpeg,.png" style="display: none" onchange="kirProfile.uploadKesihatanDokumen(this)">
-      
-      <div class="file-list">
-        ${fileList}
-      </div>
-    `;
-  }
-
   // Get file icon based on file extension
   getFileIcon(filename) {
     const ext = filename.split('.').pop().toLowerCase();
@@ -1671,8 +1546,7 @@ export class KIRProfile {
       { id: 'kafa', label: 'Pendidikan Agama (KAFA)', icon: 'mosque' },
       { id: 'pendidikan', label: 'Pendidikan', icon: 'graduation-cap' },
       { id: 'pekerjaan', label: 'Pekerjaan', icon: 'briefcase' },
-      { id: 'kesihatan', label: 'Kesihatan', icon: 'heartbeat' },
-      { id: 'dokumen', label: 'Dokumen', icon: 'file-alt' }
+      { id: 'kesihatan', label: 'Kesihatan', icon: 'heartbeat' }
     ];
 
     const sectionsHTML = sections.map(section => {
@@ -1831,8 +1705,6 @@ export class KIRProfile {
         return this.createPKIRPekerjaanSection();
       case 'kesihatan':
         return this.createPKIRKesihatanSection();
-      case 'dokumen':
-        return this.createPKIRDokumenSection();
       default:
         return this.createPKIRMaklumatAsasSection();
     }
@@ -2323,54 +2195,6 @@ export class KIRProfile {
             <button type="button" class="btn btn-primary" onclick="kirProfile.savePKIRSection('kesihatan')">
               <i class="fas fa-save"></i> Simpan Kesihatan
             </button>
-          </div>
-        </div>
-      </form>
-    `;
-  }
-
-  // Create PKIR Dokumen section
-  createPKIRDokumenSection() {
-    const dokumen = this.pkirData?.dokumen || [];
-    
-    return `
-      <form class="pkir-form" data-section="dokumen">
-        <div class="form-section">
-          <h4>Dokumen Pasangan</h4>
-          
-          <div class="form-group">
-            <label for="pkir_dokumen_upload">Muat Naik Dokumen</label>
-            <input type="file" id="pkir_dokumen_upload" multiple accept=".pdf,.jpg,.jpeg,.png">
-            <small class="form-help">Format yang diterima: PDF, JPG, PNG. Saiz maksimum: 5MB setiap fail</small>
-            <button type="button" class="btn btn-secondary" onclick="kirProfile.uploadPKIRDokumen()">
-              <i class="fas fa-upload"></i> Muat Naik
-            </button>
-          </div>
-          
-          <div class="dokumen-list">
-            <h5>Dokumen Sedia Ada</h5>
-            ${dokumen.length === 0 ? '<p class="no-documents">Tiada dokumen dimuat naik</p>' : ''}
-            <div id="pkir-dokumen-list">
-              ${dokumen.map((doc, index) => `
-                <div class="document-item" data-index="${index}">
-                  <div class="document-info">
-                    <i class="fas fa-file-alt"></i>
-                    <div class="document-details">
-                      <span class="document-name">${doc.name}</span>
-                      <span class="document-meta">${this.formatFileSize(doc.size)} • ${PasanganService.formatDate(doc.uploadedAt)}</span>
-                    </div>
-                  </div>
-                  <div class="document-actions">
-                    <button type="button" class="btn btn-sm btn-secondary" onclick="kirProfile.downloadPKIRDokumen('${doc.url}', '${doc.name}')">
-                      <i class="fas fa-download"></i>
-                    </button>
-                    <button type="button" class="btn btn-sm btn-danger" onclick="kirProfile.deletePKIRDokumen(${index})">
-                      <i class="fas fa-trash"></i>
-                    </button>
-                  </div>
-                </div>
-              `).join('')}
-            </div>
           </div>
         </div>
       </form>
@@ -3719,16 +3543,6 @@ export class KIRProfile {
     this.updateSidebarNavigation();
   }
 
-  // Toggle Ekonomi parent tab expansion
-  toggleEkonomiTab() {
-    if (this.expandedParentTabs.has('ekonomi')) {
-      this.expandedParentTabs.delete('ekonomi');
-    } else {
-      this.expandedParentTabs.add('ekonomi');
-    }
-    this.updateSidebarNavigation();
-  }
-
   // Switch to different tab
   async switchTab(tabId) {
     console.log('=== Tab Switch Debug ===');
@@ -3750,15 +3564,14 @@ export class KIRProfile {
     console.log('After tab switch - kirData:', this.kirData);
     console.log('After tab switch - relatedData:', this.relatedData);
     
-    // Auto-expand Ekonomi parent tab if switching to economic sub-tabs
-    if (['pendapatan', 'perbelanjaan', 'bantuan-bulanan'].includes(tabId)) {
-      this.expandedParentTabs.add('ekonomi');
-    }
-    
     // Update tab content
     const tabContent = document.querySelector('.tab-content');
     if (tabContent) {
-      tabContent.innerHTML = this.createTabContent().replace('<div class="tab-content">', '').replace('</div>', '');
+      tabContent.innerHTML = `
+        <div id="tab-${tabId}" class="tab-pane active">
+          ${this.createTabHTML(tabId)}
+        </div>
+      `;
     }
     
     // Update active tab
@@ -3777,23 +3590,7 @@ export class KIRProfile {
     } else if (tabId === 'program') {
       await this.loadProgramData();
       this.bindProgramEventListeners();
-    } else if (tabId === 'dokumen') {
-      await this.loadDokumenData();
-      this.bindDokumenEventListeners();
-    } else if (tabId === 'audit') {
-      await this.loadAuditData();
-      this.bindAuditEventListeners();
     }
-  }
-
-  // Toggle parent tab expansion
-  toggleParentTab(parentId) {
-    if (this.expandedParentTabs.has(parentId)) {
-      this.expandedParentTabs.delete(parentId);
-    } else {
-      this.expandedParentTabs.add(parentId);
-    }
-    this.updateTabNavigation();
   }
 
   // Confirm dialog for unsaved changes
@@ -4960,67 +4757,6 @@ export class KIRProfile {
     }
   }
 
-  // Document management for Dokumen section
-  async uploadPKIRDokumen() {
-    const fileInput = document.getElementById('pkir_dokumen_upload');
-    const files = fileInput.files;
-    
-    if (!files.length) {
-      this.showToast('Sila pilih fail untuk dimuat naik', 'warning');
-      return;
-    }
-
-    try {
-      for (const file of files) {
-        if (file.size > 5 * 1024 * 1024) { // 5MB limit
-          this.showToast(`Fail ${file.name} terlalu besar. Saiz maksimum adalah 5MB.`, 'error');
-          continue;
-        }
-
-        const uploadResult = await PasanganService.uploadPasanganDokumen(this.pkirData.id, file);
-        
-        if (!this.pkirData.dokumen) this.pkirData.dokumen = [];
-        this.pkirData.dokumen.push(uploadResult);
-      }
-      
-      fileInput.value = ''; // Clear file input
-      this.showToast('Dokumen berjaya dimuat naik', 'success');
-      this.render();
-      
-    } catch (error) {
-      console.error('Error uploading documents:', error);
-      this.showToast('Ralat memuat naik dokumen: ' + error.message, 'error');
-    }
-  }
-
-  downloadPKIRDokumen(url, filename) {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.target = '_blank';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
-
-  async deletePKIRDokumen(index) {
-    if (!confirm('Adakah anda pasti untuk memadam dokumen ini?')) {
-      return;
-    }
-
-    try {
-      this.pkirData.dokumen.splice(index, 1);
-      await PasanganService.updatePKIR(this.pkirData.id, { dokumen: this.pkirData.dokumen });
-      
-      this.showToast('Dokumen berjaya dipadam', 'success');
-      this.render();
-      
-    } catch (error) {
-      console.error('Error deleting document:', error);
-      this.showToast('Ralat memadam dokumen: ' + error.message, 'error');
-    }
-  }
-
   formatFileSize(bytes) {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -5563,98 +5299,6 @@ export class KIRProfile {
     }
   }
 
-  // ===== DOKUMEN KESIHATAN METHODS =====
-
-  // Upload kesihatan dokumen
-  async uploadKesihatanDokumen(input) {
-    const file = input.files[0];
-    if (!file) return;
-    
-    // Validate file size (5MB max)
-    if (file.size > 5 * 1024 * 1024) {
-      this.showToast('Saiz fail melebihi 5MB', 'error');
-      return;
-    }
-    
-    // Validate file type
-    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
-    if (!allowedTypes.includes(file.type)) {
-      this.showToast('Format fail tidak disokong. Gunakan PDF, JPG atau PNG', 'error');
-      return;
-    }
-    
-    try {
-      // Create file data
-      const fileData = {
-        nama_file: file.name,
-        saiz_file: file.size,
-        jenis_file: file.type,
-        tarikh_muat_naik: new Date().toISOString()
-      };
-      
-      const dokumen = [...(this.relatedData?.kesihatan?.dokumen || [])];
-      dokumen.push(fileData);
-      
-      const kesihatanData = { ...this.relatedData?.kesihatan };
-      kesihatanData.dokumen = dokumen;
-      kesihatanData.updated_at = new Date().toISOString();
-      
-      await KIRService.updateRelatedDocument(this.kirId, 'kesihatan', kesihatanData);
-      
-      // Update local data
-      if (!this.relatedData.kesihatan) this.relatedData.kesihatan = {};
-      this.relatedData.kesihatan.dokumen = dokumen;
-      this.relatedData.kesihatan.updated_at = kesihatanData.updated_at;
-      
-      this.showToast('Dokumen berjaya dimuat naik', 'success');
-      this.refreshKesihatanSection();
-      
-      // Clear input
-      input.value = '';
-      
-    } catch (error) {
-      console.error('Error uploading dokumen:', error);
-      this.showToast('Ralat memuat naik dokumen: ' + error.message, 'error');
-    }
-  }
-
-  // Download kesihatan dokumen
-  downloadKesihatanDokumen(index) {
-    const file = this.relatedData?.kesihatan?.dokumen?.[index];
-    if (!file) return;
-    
-    // For demo purposes, show download message
-    this.showToast(`Memuat turun ${file.nama_file}...`, 'info');
-  }
-
-  // Delete kesihatan dokumen
-  async deleteKesihatanDokumen(index) {
-    if (!confirm('Adakah anda pasti mahu memadam dokumen ini?')) return;
-    
-    try {
-      const dokumen = [...(this.relatedData?.kesihatan?.dokumen || [])];
-      dokumen.splice(index, 1);
-      
-      const kesihatanData = { ...this.relatedData?.kesihatan };
-      kesihatanData.dokumen = dokumen;
-      kesihatanData.updated_at = new Date().toISOString();
-      
-      await KIRService.updateRelatedDocument(this.kirId, 'kesihatan', kesihatanData);
-      
-      // Update local data
-      if (!this.relatedData.kesihatan) this.relatedData.kesihatan = {};
-      this.relatedData.kesihatan.dokumen = dokumen;
-      this.relatedData.kesihatan.updated_at = kesihatanData.updated_at;
-      
-      this.showToast('Dokumen berjaya dipadam', 'success');
-      this.refreshKesihatanSection();
-      
-    } catch (error) {
-      console.error('Error deleting dokumen:', error);
-      this.showToast('Ralat memadam dokumen: ' + error.message, 'error');
-    }
-  }
-
   // Refresh current kesihatan section
   refreshKesihatanSection() {
     const sectionContent = document.querySelector('.kesihatan-section-content');
@@ -5691,99 +5335,6 @@ export class KIRProfile {
             <div class="skeleton-row"></div>
           </div>
           <div id="program-table"></div>
-        </div>
-      </div>
-    `;
-  }
-
-  // Dokumen Tab
-  createDokumenTab() {
-    return `
-      <div class="dokumen-tab-content">
-        <div class="dokumen-header">
-          <h3>Dokumen</h3>
-          <div class="dokumen-actions">
-            <button class="btn btn-primary" onclick="kirProfile.openDokumenUploader()">
-              <i class="fas fa-upload"></i> Muat Naik Dokumen
-            </button>
-          </div>
-        </div>
-        
-        <div class="dokumen-uploader" id="dokumen-uploader" style="display: none;">
-          <div class="upload-zone" id="upload-zone">
-            <i class="fas fa-cloud-upload-alt"></i>
-            <p>Seret dan lepas fail di sini atau klik untuk pilih</p>
-            <input type="file" id="dokumen-file" accept=".pdf,.jpg,.jpeg,.png" multiple>
-            <div class="upload-info">
-              <small>Format yang diterima: PDF, JPG, JPEG, PNG (Maksimum 10MB setiap fail)</small>
-            </div>
-          </div>
-          <div class="kategori-selector">
-            <label>Kategori Dokumen:</label>
-            <select id="dokumen-kategori">
-              <option value="IC">Kad Pengenalan</option>
-              <option value="Sijil Nikah">Sijil Nikah</option>
-              <option value="Surat Sokongan">Surat Sokongan</option>
-              <option value="Laporan Perubatan">Laporan Perubatan</option>
-              <option value="Lain-lain">Lain-lain</option>
-            </select>
-          </div>
-        </div>
-        
-        <div class="dokumen-filters">
-          <select id="dokumen-filter-kategori">
-            <option value="">Semua Kategori</option>
-            <option value="IC">Kad Pengenalan</option>
-            <option value="Sijil Nikah">Sijil Nikah</option>
-            <option value="Surat Sokongan">Surat Sokongan</option>
-            <option value="Laporan Perubatan">Laporan Perubatan</option>
-            <option value="Lain-lain">Lain-lain</option>
-          </select>
-        </div>
-        
-        <div class="dokumen-list-container">
-          <div class="loading-skeleton" id="dokumen-loading">
-            <div class="skeleton-row"></div>
-            <div class="skeleton-row"></div>
-            <div class="skeleton-row"></div>
-          </div>
-          <div id="dokumen-list"></div>
-        </div>
-      </div>
-    `;
-  }
-
-  // Audit Trail Tab
-  createAuditTab() {
-    return `
-      <div class="audit-tab-content">
-        <div class="audit-header">
-          <h3>Audit Trail</h3>
-          <div class="audit-filters">
-            <input type="date" id="audit-date-from" placeholder="Tarikh Mula">
-            <input type="date" id="audit-date-to" placeholder="Tarikh Akhir">
-            <select id="audit-entiti">
-              <option value="">Semua Entiti</option>
-              <option value="kir">KIR</option>
-              <option value="kir_air">AIR</option>
-              <option value="kir_pasangan">Pasangan</option>
-              <option value="kir_pendapatan">Pendapatan</option>
-              <option value="kir_perbelanjaan">Perbelanjaan</option>
-              <option value="kir_bantuan">Bantuan</option>
-            </select>
-            <button class="btn btn-secondary" onclick="kirProfile.refreshAuditTrail()">
-              <i class="fas fa-refresh"></i> Muat Semula
-            </button>
-          </div>
-        </div>
-        
-        <div class="audit-table-container">
-          <div class="loading-skeleton" id="audit-loading">
-            <div class="skeleton-row"></div>
-            <div class="skeleton-row"></div>
-            <div class="skeleton-row"></div>
-          </div>
-          <div id="audit-table"></div>
         </div>
       </div>
     `;
@@ -6036,335 +5587,6 @@ export class KIRProfile {
     this.programData = filteredData;
     this.renderProgramTable();
     this.programData = originalData;
-  }
-
-  // Dokumen data loading and methods
-  async loadDokumenData() {
-    try {
-      const loadingElement = document.getElementById('dokumen-loading');
-      const listElement = document.getElementById('dokumen-list');
-      
-      if (loadingElement) loadingElement.style.display = 'block';
-      if (listElement) listElement.style.display = 'none';
-      
-      this.dokumenData = await DokumenService.listDokumen(this.kirId);
-      this.renderDokumenList();
-      
-      if (loadingElement) loadingElement.style.display = 'none';
-      if (listElement) listElement.style.display = 'block';
-    } catch (error) {
-      console.error('Error loading dokumen data:', error);
-      this.showToast('Gagal memuat data dokumen: ' + error.message, 'error');
-    }
-  }
-
-  renderDokumenList() {
-    const listContainer = document.getElementById('dokumen-list');
-    if (!listContainer) return;
-    
-    if (!this.dokumenData || this.dokumenData.length === 0) {
-      listContainer.innerHTML = `
-        <div class="empty-state">
-          <i class="fas fa-file-alt"></i>
-          <h4>Tiada dokumen</h4>
-          <p>Belum ada dokumen yang dimuat naik untuk KIR ini.</p>
-        </div>
-      `;
-      return;
-    }
-    
-    const listHTML = `
-      <table class="dokumen-table">
-        <thead>
-          <tr>
-            <th>Nama Fail</th>
-            <th>Kategori</th>
-            <th>Saiz</th>
-            <th>Dimuat naik pada</th>
-            <th>Aksi</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${this.dokumenData.map(doc => `
-            <tr data-doc-id="${doc.id}">
-              <td>
-                <div class="file-info">
-                  <i class="${DokumenService.getFileIcon(doc.mime)}"></i>
-                  <span class="file-name">${doc.name}</span>
-                </div>
-              </td>
-              <td><span class="kategori-badge kategori-${doc.kategori?.toLowerCase().replace(/\s+/g, '-')}">${doc.kategori}</span></td>
-              <td>${DokumenService.formatFileSize(doc.size)}</td>
-              <td>${this.formatDate(doc.uploadedAt)}</td>
-              <td>
-                <button class="btn btn-sm btn-primary" onclick="window.open('${doc.url}', '_blank')">
-                  <i class="fas fa-download"></i>
-                </button>
-                <button class="btn btn-sm btn-danger" onclick="kirProfile.deleteDokumen('${doc.id}')">
-                  <i class="fas fa-trash"></i>
-                </button>
-              </td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    `;
-    
-    listContainer.innerHTML = listHTML;
-  }
-
-  openDokumenUploader() {
-    const uploader = document.getElementById('dokumen-uploader');
-    if (uploader) {
-      uploader.style.display = uploader.style.display === 'none' ? 'block' : 'none';
-    }
-  }
-
-  async uploadDokumen(files, kategori) {
-    try {
-      // Validate files first
-      const validFiles = [];
-      const errors = [];
-      
-      Array.from(files).forEach(file => {
-        try {
-          DokumenService.validateFile(file);
-          validFiles.push(file);
-        } catch (error) {
-          errors.push(`${file.name}: ${error.message}`);
-        }
-      });
-      
-      if (errors.length > 0) {
-        this.showToast('Ralat pengesahan fail: ' + errors.join(', '), 'error');
-        if (validFiles.length === 0) return;
-      }
-      
-      const uploadPromises = validFiles.map(file => 
-        DokumenService.uploadDokumen(this.kirId, file, kategori, 'user')
-      );
-      
-      const results = await Promise.all(uploadPromises);
-      
-      // Add to local data
-      this.dokumenData = [...(this.dokumenData || []), ...results];
-      this.renderDokumenList();
-      
-      // Log audit trail
-      for (const result of results) {
-        await AuditService.logDokumenChange(
-          this.kirId, 
-          'upload', 
-          null, 
-          result.name, 
-          'user'
-        );
-      }
-      
-      this.showToast(`${results.length} dokumen berjaya dimuat naik`, 'success');
-      
-      // Clear file input and hide uploader
-      const fileInput = document.getElementById('dokumen-file');
-      if (fileInput) fileInput.value = '';
-      this.openDokumenUploader();
-    } catch (error) {
-      console.error('Error uploading dokumen:', error);
-      this.showToast('Gagal memuat naik dokumen: ' + error.message, 'error');
-    }
-  }
-
-  async deleteDokumen(docId) {
-    if (!confirm('Adakah anda pasti mahu memadam dokumen ini?')) return;
-    
-    try {
-      const doc = this.dokumenData.find(d => d.id === docId);
-      
-      await DokumenService.deleteDokumen(docId);
-      
-      // Remove from local data
-      this.dokumenData = this.dokumenData.filter(d => d.id !== docId);
-      this.renderDokumenList();
-      
-      // Log audit trail
-      await AuditService.logDokumenChange(
-        this.kirId, 
-        'delete', 
-        doc?.name, 
-        null, 
-        'user'
-      );
-      
-      this.showToast('Dokumen berjaya dipadam', 'success');
-    } catch (error) {
-      console.error('Error deleting dokumen:', error);
-      this.showToast('Gagal memadam dokumen: ' + error.message, 'error');
-    }
-  }
-
-  bindDokumenEventListeners() {
-    // File input change
-    const fileInput = document.getElementById('dokumen-file');
-    if (fileInput) {
-      fileInput.addEventListener('change', (e) => {
-        if (e.target.files.length > 0) {
-          const kategori = document.getElementById('dokumen-kategori')?.value || 'Lain-lain';
-          this.uploadDokumen(e.target.files, kategori);
-        }
-      });
-    }
-    
-    // Drag and drop
-    const uploadZone = document.getElementById('upload-zone');
-    if (uploadZone) {
-      uploadZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        uploadZone.classList.add('drag-over');
-      });
-      
-      uploadZone.addEventListener('dragleave', () => {
-        uploadZone.classList.remove('drag-over');
-      });
-      
-      uploadZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        uploadZone.classList.remove('drag-over');
-        
-        const kategori = document.getElementById('dokumen-kategori')?.value || 'Lain-lain';
-        this.uploadDokumen(e.dataTransfer.files, kategori);
-      });
-      
-      uploadZone.addEventListener('click', () => {
-        fileInput?.click();
-      });
-    }
-    
-    // Filter by kategori
-    const filterKategori = document.getElementById('dokumen-filter-kategori');
-    if (filterKategori) {
-      filterKategori.addEventListener('change', () => this.filterDokumen());
-    }
-  }
-
-  filterDokumen() {
-    const kategori = document.getElementById('dokumen-filter-kategori')?.value;
-    
-    if (!this.dokumenData) return;
-    
-    let filteredData = [...this.dokumenData];
-    
-    if (kategori) {
-      filteredData = filteredData.filter(d => d.kategori === kategori);
-    }
-    
-    // Temporarily replace data for rendering
-    const originalData = this.dokumenData;
-    this.dokumenData = filteredData;
-    this.renderDokumenList();
-    this.dokumenData = originalData;
-  }
-
-  // Audit Trail data loading and methods
-  async loadAuditData() {
-    try {
-      const loadingElement = document.getElementById('audit-loading');
-      const tableElement = document.getElementById('audit-table');
-      
-      if (loadingElement) loadingElement.style.display = 'block';
-      if (tableElement) tableElement.style.display = 'none';
-      
-      this.auditData = await AuditService.listAuditForKir(this.kirId);
-      this.renderAuditTable();
-      
-      if (loadingElement) loadingElement.style.display = 'none';
-      if (tableElement) tableElement.style.display = 'block';
-    } catch (error) {
-      console.error('Error loading audit data:', error);
-      this.showToast('Gagal memuat data audit: ' + error.message, 'error');
-    }
-  }
-
-  renderAuditTable() {
-    const tableContainer = document.getElementById('audit-table');
-    if (!tableContainer) return;
-    
-    if (!this.auditData || this.auditData.length === 0) {
-      tableContainer.innerHTML = `
-        <div class="empty-state">
-          <i class="fas fa-history"></i>
-          <h4>Tiada rekod audit</h4>
-          <p>Belum ada aktiviti yang direkodkan untuk KIR ini.</p>
-        </div>
-      `;
-      return;
-    }
-    
-    const tableHTML = `
-      <table class="audit-table">
-        <thead>
-          <tr>
-            <th>Tarikh</th>
-            <th>Pengguna</th>
-            <th>Entiti</th>
-            <th>Medan</th>
-            <th>Sebelum</th>
-            <th>Selepas</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${this.auditData.map(log => {
-            const formatted = AuditService.formatAuditLog(log);
-            return `
-              <tr>
-                <td>${formatted.formattedDate}</td>
-                <td>${log.pengguna}</td>
-                <td><span class="entiti-badge entiti-${log.entiti}">${formatted.entitiFriendlyName}</span></td>
-                <td>${log.medan}</td>
-                <td class="audit-value">${log.sebelum || '<em>kosong</em>'}</td>
-                <td class="audit-value">${log.selepas || '<em>kosong</em>'}</td>
-              </tr>
-            `;
-          }).join('')}
-        </tbody>
-      </table>
-    `;
-    
-    tableContainer.innerHTML = tableHTML;
-  }
-
-  refreshAuditTrail() {
-    this.loadAuditData();
-  }
-
-  bindAuditEventListeners() {
-    // Filter event listeners
-    const dateFromInput = document.getElementById('audit-date-from');
-    const dateToInput = document.getElementById('audit-date-to');
-    const entitiSelect = document.getElementById('audit-entiti');
-    
-    [dateFromInput, dateToInput, entitiSelect].forEach(element => {
-      if (element) {
-        element.addEventListener('change', () => this.filterAudit());
-      }
-    });
-  }
-
-  async filterAudit() {
-    try {
-      const dateFrom = document.getElementById('audit-date-from')?.value;
-      const dateTo = document.getElementById('audit-date-to')?.value;
-      const entiti = document.getElementById('audit-entiti')?.value;
-      
-      const options = {};
-      if (dateFrom) options.dateFrom = dateFrom;
-      if (dateTo) options.dateTo = dateTo;
-      if (entiti) options.entiti = entiti;
-      
-      this.auditData = await AuditService.listAuditForKir(this.kirId, options);
-      this.renderAuditTable();
-    } catch (error) {
-      console.error('Error filtering audit data:', error);
-      this.showToast('Gagal menapis data audit: ' + error.message, 'error');
-    }
   }
 
   // Toast notification helper
