@@ -30,16 +30,23 @@ export class KIRService {
       // Validate and clean data using schema
       const cleanedData = validateKIR(draft);
       
-
-      
-      // Validate dates
-      this.validateDates(cleanedData);
-      
       // Normalize No. KP
       const normalizedNoKP = this.normalizeNoKP(cleanedData.no_kp || cleanedData.no_kp_raw);
       if (!normalizedNoKP) {
         throw new Error('No. KP is required for KIR creation');
       }
+      
+      // Derive birth details from No. KP when available
+      const { birthDate, age } = this.deriveBirthInfoFromNoKP(normalizedNoKP);
+      if (!cleanedData.tarikh_lahir && birthDate) {
+        cleanedData.tarikh_lahir = birthDate;
+      }
+      if ((cleanedData.umur === undefined || cleanedData.umur === null) && age !== null) {
+        cleanedData.umur = age;
+      }
+
+      // Validate dates after enrichment
+      this.validateDates(cleanedData);
       
       // Create KIR document reference
       const kirRef = doc(collection(db, COLLECTIONS.KIR));
@@ -64,7 +71,7 @@ export class KIRService {
           nama_penuh: cleanedData.nama_penuh || '',
           jantina: cleanedData.jantina || '',
           tarikh_lahir: cleanedData.tarikh_lahir || null,
-          umur: cleanedData.umur || null,
+          umur: cleanedData.umur ?? null,
           bangsa: cleanedData.bangsa || '',
           agama: cleanedData.agama || '',
           warganegara: cleanedData.warganegara || '',
@@ -136,9 +143,6 @@ export class KIRService {
       
 
       
-      // Validate dates
-      this.validateDates(cleanedData);
-      
       // Handle No. KP changes with index updates
       if (cleanedData.no_kp && this.normalizeNoKP(cleanedData.no_kp) !== this.normalizeNoKP(currentData.no_kp)) {
         await this.updateNoKPIndex(currentData.no_kp, cleanedData.no_kp, id);
@@ -165,6 +169,21 @@ export class KIRService {
         updateData.no_kp = this.normalizeNoKP(cleanedData.no_kp);
         updateData.no_kp_raw = cleanedData.no_kp_raw || cleanedData.no_kp;
       }
+      
+      // Enrich birth details from No. KP if missing
+      const finalNoKP = updateData.no_kp || currentData.no_kp;
+      if (finalNoKP) {
+        const { birthDate, age } = this.deriveBirthInfoFromNoKP(finalNoKP);
+        if ((updateData.tarikh_lahir === undefined || updateData.tarikh_lahir === null) && birthDate) {
+          updateData.tarikh_lahir = birthDate;
+        }
+        if ((updateData.umur === undefined || updateData.umur === null) && age !== null) {
+          updateData.umur = age;
+        }
+      }
+
+      // Validate dates after enrichment
+      this.validateDates(updateData);
 
       await updateDoc(kirRef, updateData);
 
@@ -355,6 +374,68 @@ export class KIRService {
   // Helper method to normalize No. KP (remove spaces and dashes)
   static normalizeNoKP(noKP) {
     return noKP.replace(/[\s-]/g, '');
+  }
+
+  // Derive birth date and age from Malaysian NRIC (No. KP)
+  static deriveBirthInfoFromNoKP(noKP) {
+    if (!noKP) {
+      return { birthDate: null, age: null };
+    }
+
+    const digits = String(noKP).replace(/\D/g, '');
+    if (digits.length < 6) {
+      return { birthDate: null, age: null };
+    }
+
+    const yearPart = parseInt(digits.slice(0, 2), 10);
+    const monthPart = parseInt(digits.slice(2, 4), 10);
+    const dayPart = parseInt(digits.slice(4, 6), 10);
+
+    if (Number.isNaN(yearPart) || Number.isNaN(monthPart) || Number.isNaN(dayPart)) {
+      return { birthDate: null, age: null };
+    }
+
+    if (monthPart < 1 || monthPart > 12 || dayPart < 1 || dayPart > 31) {
+      return { birthDate: null, age: null };
+    }
+
+    const today = new Date();
+    const currentCentury = Math.floor(today.getFullYear() / 100) * 100;
+    const currentYearTwoDigit = today.getFullYear() % 100;
+    const fullYear = yearPart > currentYearTwoDigit
+      ? currentCentury - 100 + yearPart
+      : currentCentury + yearPart;
+
+    const birthDate = new Date(fullYear, monthPart - 1, dayPart);
+
+    // Guard against invalid dates (e.g. 310299 -> Feb 31)
+    if (
+      Number.isNaN(birthDate.getTime()) ||
+      birthDate.getFullYear() !== fullYear ||
+      birthDate.getMonth() !== monthPart - 1 ||
+      birthDate.getDate() !== dayPart
+    ) {
+      return { birthDate: null, age: null };
+    }
+
+    const age = this.calculateAgeFromDate(birthDate);
+    return { birthDate, age };
+  }
+
+  static calculateAgeFromDate(birthDate) {
+    if (!(birthDate instanceof Date) || Number.isNaN(birthDate.getTime())) {
+      return null;
+    }
+
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+
+    return age;
   }
   
   // Atomic No. KP uniqueness using index collection

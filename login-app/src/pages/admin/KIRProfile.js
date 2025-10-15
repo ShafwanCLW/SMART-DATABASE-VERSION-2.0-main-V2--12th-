@@ -527,12 +527,12 @@ export class KIRProfile {
           <div class="form-row">
             <div class="form-group">
               <label for="tarikh_lahir">Tarikh Lahir</label>
-              <input type="date" id="tarikh_lahir" name="tarikh_lahir" value="${data.tarikh_lahir || ''}">
+              <input type="date" id="tarikh_lahir" name="tarikh_lahir" value="${this.getDateInputValue(data.tarikh_lahir)}">
             </div>
             
             <div class="form-group">
               <label for="umur">Umur</label>
-              <input type="number" id="umur" name="umur" value="${data.umur || ''}" readonly>
+              <input type="number" id="umur" name="umur" value="${data.umur ?? ''}" readonly>
             </div>
           </div>
           
@@ -1804,6 +1804,29 @@ export class KIRProfile {
     } catch (error) {
       return 'Tarikh tidak sah';
     }
+  }
+
+  getDateInputValue(value) {
+    if (!value) return '';
+
+    let dateValue = null;
+
+    if (value && typeof value.toDate === 'function') {
+      dateValue = value.toDate();
+    } else if (value instanceof Date) {
+      dateValue = value;
+    } else if (typeof value === 'string' || typeof value === 'number') {
+      const parsed = new Date(value);
+      if (!Number.isNaN(parsed.getTime())) {
+        dateValue = parsed;
+      }
+    }
+
+    if (!dateValue || Number.isNaN(dateValue.getTime())) {
+      return '';
+    }
+
+    return dateValue.toISOString().slice(0, 10);
   }
 
   // Calculate completeness percentage
