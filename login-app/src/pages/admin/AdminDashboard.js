@@ -40,10 +40,6 @@ export function createAdminSidebar(user) {
           <span class="nav-icon">📅</span>
           Program & Kehadiran
         </a>
-        <a href="#" class="nav-item" data-section="program-kehadiran-new">
-          <span class="nav-icon">📅</span>
-          Program & Kehadiran (New)
-        </a>
         <a href="#" class="nav-item" data-section="financial-tracking">
             <span class="nav-icon">💰</span>
             Financial Tracking
@@ -3144,7 +3140,7 @@ async function setupProgramManagementListeners(programService) {
   if (addProgramBtn) {
     addProgramBtn.addEventListener('click', () => {
       // Show program form modal or navigate to program creation page
-      alert('Add Program feature coming soon!');
+      
     });
   }
   
@@ -5136,6 +5132,7 @@ async function loadPrograms() {
           <div class="action-buttons">
             <button class="btn btn-sm btn-primary edit-program" data-id="${program.id}">Edit</button>
             <button class="btn btn-sm btn-danger delete-program" data-id="${program.id}">Delete</button>
+            <button class="btn btn-sm btn-danger attendance-program" data-id="${program.id}">Manage Attendance</button>
           </div>
         </td>
       `;
@@ -5149,6 +5146,11 @@ async function loadPrograms() {
       
       row.querySelector('.delete-program').addEventListener('click', () => {
         deleteProgram(program.id);
+      });
+      
+      // Add event listener for manage attendance button
+      row.querySelector('.attendance-program').addEventListener('click', () => {
+        showKIRListModal(program.id, program.name);
       });
     });
     
@@ -5307,9 +5309,7 @@ async function saveProgram() {
     
     // Reload programs
     loadPrograms();
-    
-    // Show success message
-    alert('Program created successfully!');
+  
     
   } catch (error) {
     console.error('Error saving program:', error);
@@ -7341,7 +7341,7 @@ function openAddProgramNewModal() {
       <div class="modal-content enhanced-modal">
         <div class="modal-header">
           <h2><i class="fas fa-plus-circle"></i> Add New Program</h2>
-          <span class="close-modal" onclick="closeAddProgramNewModal()">&times;</span>
+          <span class="close-modal" id="close-program-new-modal">&times;</span>
         </div>
         <div class="modal-body">
           <form id="add-program-new-form">
@@ -7691,4 +7691,156 @@ async function exportAttendanceDataNew() {
     console.error('Error exporting attendance data:', error);
     alert('Error exporting attendance data: ' + error.message);
   }
+}
+
+// Function to show KIR list modal
+async function showKIRListModal(programId, programName) {
+  try {
+    // Create modal HTML
+    const modalHTML = `
+      <div id="kir-list-modal" class="modal">
+        <div class="modal-content enhanced-modal">
+          <div class="modal-header">
+            <h2><i class="fas fa-users"></i> KIR List for Program: ${programName}</h2>
+            <span class="close-modal" onclick="closeKIRListModal()">&times;</span>
+          </div>
+          <div class="modal-body">
+            <div class="search-container">
+              <input type="text" id="kir-search" class="form-input" placeholder="Search KIR by name or ID...">
+            </div>
+            <div id="kir-list-loading" class="loading-spinner">
+              <i class="fas fa-spinner fa-spin"></i> Loading KIR data...
+            </div>
+            <div id="kir-list-container" style="display: none;">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>KIR ID</th>
+                    <th>Name</th>
+                    <th>IC Number</th>
+                    <th>Phone</th>
+                    <th>Address</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="kir-list-tbody">
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline" onclick="closeKIRListModal()">
+              <i class="fas fa-times"></i> Close
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // Add modal to the DOM
+    const modalContainer = document.createElement('div');
+    modalContainer.innerHTML = modalHTML;
+    document.body.appendChild(modalContainer.firstElementChild);
+    
+    // Show the modal
+    const modal = document.getElementById('kir-list-modal');
+    modal.style.display = 'block';
+    
+    // Load KIR data
+    await loadKIRListData();
+    
+    // Add search functionality
+    const searchInput = document.getElementById('kir-search');
+    searchInput.addEventListener('input', filterKIRList);
+    
+  } catch (error) {
+    console.error('Error showing KIR list modal:', error);
+    alert('Error loading KIR list: ' + error.message);
+  }
+}
+
+// Function to close KIR list modal
+function closeKIRListModal() {
+  const modal = document.getElementById('kir-list-modal');
+  if (modal) {
+    modal.remove();
+  }
+}
+
+// Function to load KIR data
+async function loadKIRListData() {
+  try {
+    const loadingDiv = document.getElementById('kir-list-loading');
+    const containerDiv = document.getElementById('kir-list-container');
+    const tbody = document.getElementById('kir-list-tbody');
+    
+    // Show loading
+    loadingDiv.style.display = 'block';
+    containerDiv.style.display = 'none';
+    
+    // Import KIRService
+    const { KIRService } = await import('../../services/backend/KIRService.js');
+    
+    // Get KIR list
+    const kirResult = await KIRService.getKIRList();
+    const kirList = kirResult.items || [];
+    
+    // Clear existing data
+    tbody.innerHTML = '';
+    
+    // Populate table
+    kirList.forEach(kir => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${kir.id}</td>
+        <td>${kir.nama_penuh || kir.nama || 'N/A'}</td>
+        <td>${kir.no_kp || 'N/A'}</td>
+        <td>${kir.telefon || 'N/A'}</td>
+        <td>${kir.alamat || 'N/A'}</td>
+        <td>
+          <button class="btn btn-sm btn-primary view-kir-btn" data-kir-id="${kir.id}">
+            <i class="fas fa-eye"></i> View
+          </button>
+        </td>
+      `;
+      tbody.appendChild(row);
+    });
+    
+    // Add event listeners for view buttons
+    document.querySelectorAll('.view-kir-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const kirId = e.target.closest('.view-kir-btn').dataset.kirId;
+        viewKIRDetails(kirId);
+      });
+    });
+    
+    // Hide loading and show container
+    loadingDiv.style.display = 'none';
+    containerDiv.style.display = 'block';
+    
+  } catch (error) {
+    console.error('Error loading KIR data:', error);
+    const loadingDiv = document.getElementById('kir-list-loading');
+    loadingDiv.innerHTML = `<div class="error-text">Error loading KIR data: ${error.message}</div>`;
+  }
+}
+
+// Function to filter KIR list
+function filterKIRList() {
+  const searchTerm = document.getElementById('kir-search').value.toLowerCase();
+  const rows = document.querySelectorAll('#kir-list-tbody tr');
+  
+  rows.forEach(row => {
+    const text = row.textContent.toLowerCase();
+    row.style.display = text.includes(searchTerm) ? '' : 'none';
+  });
+}
+
+// Function to view KIR details
+function viewKIRDetails(kirId) {
+  // Close current modal
+  closeKIRListModal();
+  
+  // Navigate to KIR profile page
+  window.location.href = `../admin/KIRProfile.html?id=${kirId}`;
 }

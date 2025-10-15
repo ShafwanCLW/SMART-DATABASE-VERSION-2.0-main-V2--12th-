@@ -127,10 +127,168 @@ export class App {
       // Setup Cipta KIR wizard listeners for admin dashboard
       setupCiptaKIRListeners();
 
-      // Setup Program & Kehadiran listeners for admin dashboard
-      setupProgramKehadiranListeners();
-      // Setup Program & Kehadiran (New) listeners for admin dashboard
+      // Setup Program & Kehadiran (New) listeners for admin dashboard only
+      // Using only the new version to prevent duplicate program creation
       setupProgramKehadiranNewListeners();
+      
+      // Make the closeAddProgramNewModal function globally available
+      window.closeAddProgramNewModal = function() {
+        const modal = document.getElementById('add-program-new-modal');
+        if (modal) {
+          modal.style.display = 'none';
+          modal.remove();
+        }
+      };
+      
+      // Make the KIR list modal functions globally available
+      window.openKIRListModal = function(programId) {
+        console.log('Opening KIR List modal for program ID:', programId);
+        
+        // Create KIR list modal HTML
+        const modalHTML = `
+          <div id="kir-list-modal" class="modal">
+            <div class="modal-content enhanced-modal">
+              <div class="modal-header">
+                <h2><i class="fas fa-users"></i> KIR Attendance Management</h2>
+                <span class="close-modal" id="close-kir-list-modal">&times;</span>
+              </div>
+              <div class="modal-body">
+                <div class="search-container">
+                  <input type="text" id="kir-search" class="form-input" placeholder="Search by name or IC number...">
+                </div>
+                <div class="kir-list-container">
+                  <table class="data-table">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>IC Number</th>
+                        <th>Phone</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="kir-list-body">
+                      <tr>
+                        <td colspan="4" class="text-center">Loading KIR data...</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+        
+        // Add modal to DOM
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // Show modal
+        const modal = document.getElementById('kir-list-modal');
+        modal.style.display = 'block';
+        
+        // Add close button event listener
+        const closeBtn = document.getElementById('close-kir-list-modal');
+        closeBtn.addEventListener('click', window.closeKIRListModal);
+        
+        // Load KIR data
+        window.loadKIRListData(programId);
+      };
+      
+      window.closeKIRListModal = function() {
+        const modal = document.getElementById('kir-list-modal');
+        if (modal) {
+          modal.style.display = 'none';
+          modal.remove();
+        }
+      };
+      
+      window.loadKIRListData = async function(programId) {
+        try {
+          const kirListBody = document.getElementById('kir-list-body');
+          
+          // Fetch KIR data from KIRService
+          const result = await KIRService.getKIRList();
+          const kirData = result.items || [];
+          
+          if (kirData.length === 0) {
+            kirListBody.innerHTML = `<tr><td colspan="4" class="text-center">No KIR records found</td></tr>`;
+            return;
+          }
+          
+          // Populate table with KIR data
+          kirListBody.innerHTML = kirData.map(kir => `
+            <tr>
+              <td>${kir.nama_penuh || 'Unknown'}</td>
+              <td>${kir.no_kp || 'N/A'}</td>
+              <td>${kir.telefon_utama || 'N/A'}</td>
+              <td>
+                <button class="btn btn-sm btn-primary mark-attendance" data-program-id="${programId}" data-kir-id="${kir.id}">
+                  Mark Attendance
+                </button>
+              </td>
+            </tr>
+          `).join('');
+          
+          // Add search functionality
+          const searchInput = document.getElementById('kir-search');
+          searchInput.addEventListener('input', () => {
+            const searchTerm = searchInput.value.toLowerCase();
+            const filteredData = kirData.filter(kir => 
+              (kir.nama_penuh || '').toLowerCase().includes(searchTerm) || 
+              (kir.no_kp || '').toLowerCase().includes(searchTerm)
+            );
+            
+            if (filteredData.length === 0) {
+              kirListBody.innerHTML = `<tr><td colspan="4" class="text-center">No matching KIR records found</td></tr>`;
+              return;
+            }
+            
+            kirListBody.innerHTML = filteredData.map(kir => `
+              <tr>
+                <td>${kir.nama_penuh || 'Unknown'}</td>
+                <td>${kir.no_kp || 'N/A'}</td>
+                <td>${kir.telefon_utama || 'N/A'}</td>
+                <td>
+                  <button class="btn btn-sm btn-primary mark-attendance" data-program-id="${programId}" data-kir-id="${kir.id}">
+                    Mark Attendance
+                  </button>
+                </td>
+              </tr>
+            `).join('');
+          });
+          
+          // Add event listeners for mark attendance buttons
+          document.querySelectorAll('.mark-attendance').forEach(button => {
+            button.addEventListener('click', (e) => {
+              const programId = e.target.getAttribute('data-program-id');
+              const kirId = e.target.getAttribute('data-kir-id');
+              console.log(`Marking attendance for KIR ID: ${kirId} in Program ID: ${programId}`);
+              // Here you would implement the attendance marking functionality
+              alert(`Attendance marked for KIR ID: ${kirId}`);
+            });
+          });
+          
+        } catch (error) {
+          console.error('Error loading KIR data:', error);
+          const kirListBody = document.getElementById('kir-list-body');
+          kirListBody.innerHTML = `<tr><td colspan="4" class="text-center">Error loading KIR data: ${error.message}</td></tr>`;
+        }
+      };
+      
+      // Add event delegation for modal close buttons
+      document.addEventListener('click', function(event) {
+        // Check if the clicked element is a close button in any modal
+        if (event.target && event.target.classList.contains('close-modal')) {
+          window.closeAddProgramNewModal();
+        }
+        
+        // Check if the clicked element is a manage attendance button
+        if (event.target && event.target.classList.contains('attendance-program')) {
+          const programId = event.target.getAttribute('data-id');
+          if (typeof window.openKIRListModal === 'function') {
+            window.openKIRListModal(programId);
+          }
+        }
+      });
       // Setup Financial Tracking listeners for admin dashboard
       setupFinancialTrackingListeners();
       // Setup Reports listeners for admin dashboard
