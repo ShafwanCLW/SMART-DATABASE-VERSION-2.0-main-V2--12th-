@@ -39,8 +39,8 @@ export class KAFATab extends BaseTab {
           
           <div class="form-row">
             <div class="form-group">
-              <label for="kafa_iman">Tahap Iman *</label>
-              <select id="kafa_iman" name="kafa_iman" required>
+              <label for="kafa_iman">Tahap Iman</label>
+              <select id="kafa_iman" name="kafa_iman">
                 <option value="">Pilih Tahap</option>
                 <option value="1" ${tahapIman == 1 ? 'selected' : ''}>1 - Sangat Lemah</option>
                 <option value="2" ${tahapIman == 2 ? 'selected' : ''}>2 - Lemah</option>
@@ -51,8 +51,8 @@ export class KAFATab extends BaseTab {
             </div>
             
             <div class="form-group">
-              <label for="kafa_islam">Tahap Islam *</label>
-              <select id="kafa_islam" name="kafa_islam" required>
+              <label for="kafa_islam">Tahap Islam</label>
+              <select id="kafa_islam" name="kafa_islam">
                 <option value="">Pilih Tahap</option>
                 <option value="1" ${tahapIslam == 1 ? 'selected' : ''}>1 - Sangat Lemah</option>
                 <option value="2" ${tahapIslam == 2 ? 'selected' : ''}>2 - Lemah</option>
@@ -110,29 +110,21 @@ export class KAFATab extends BaseTab {
   }
 
   async save() {
-    // Validate form first
-    if (!this.validate()) {
-      this.showToast('Sila lengkapkan semua medan yang diperlukan', 'error');
-      return false;
-    }
-
     try {
       const formData = this.getFormData();
       
-      // Calculate KAFA score based on the ratings
-      const scores = [
-        parseInt(formData.kafa_iman) || 0,
-        parseInt(formData.kafa_islam) || 0,
-        parseInt(formData.kafa_fatihah) || 0,
-        parseInt(formData.kafa_solat) || 0,
-        parseInt(formData.kafa_puasa) || 0
-      ];
+      // Calculate KAFA score based on available ratings only
+      const ratingFields = ['kafa_iman', 'kafa_islam', 'kafa_fatihah', 'kafa_solat', 'kafa_puasa'];
+      const scores = ratingFields
+        .map(field => parseInt(formData[field], 10))
+        .filter(score => !Number.isNaN(score));
       
-      const totalScore = scores.reduce((sum, score) => sum + score, 0);
-      const averageScore = scores.length > 0 ? Math.round(totalScore / scores.length) : 0;
-      
-      // Add calculated score to form data
-      formData.kafa_skor = averageScore;
+      if (scores.length > 0) {
+        const totalScore = scores.reduce((sum, score) => sum + score, 0);
+        formData.kafa_skor = Math.round(totalScore / scores.length);
+      } else {
+        delete formData.kafa_skor;
+      }
 
       // Save via KIRService
       await this.kirProfile.kirService.updateKIR(this.kirProfile.kirId, formData);
@@ -154,26 +146,5 @@ export class KAFATab extends BaseTab {
       this.showToast('Ralat menyimpan data KAFA: ' + error.message, 'error');
       return false;
     }
-  }
-
-  validate() {
-    const form = document.querySelector(`[data-tab="${this.tabId}"]`);
-    if (!form) return false;
-
-    // Check required fields
-    const requiredFields = ['kafa_iman', 'kafa_islam'];
-    let isValid = true;
-
-    requiredFields.forEach(fieldName => {
-      const field = form.querySelector(`[name="${fieldName}"]`);
-      if (field && !field.value.trim()) {
-        field.classList.add('error');
-        isValid = false;
-      } else if (field) {
-        field.classList.remove('error');
-      }
-    });
-
-    return isValid;
   }
 }

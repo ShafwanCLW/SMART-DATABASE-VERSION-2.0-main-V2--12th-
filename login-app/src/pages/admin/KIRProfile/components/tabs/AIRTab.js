@@ -24,7 +24,7 @@ export class AIRTab extends BaseTab {
               <div class="form-grid">
                 <div class="form-group">
                   <label for="nama">Nama Penuh</label>
-                  <input type="text" id="nama" name="nama" required>
+                  <input type="text" id="nama" name="nama">
                 </div>
                 <div class="form-group">
                   <label for="no_kp">No. Kad Pengenalan</label>
@@ -36,7 +36,7 @@ export class AIRTab extends BaseTab {
                 </div>
                 <div class="form-group">
                   <label for="tarikh_lahir">Tarikh Lahir</label>
-                  <input type="date" id="tarikh_lahir" name="tarikh_lahir" required>
+                  <input type="date" id="tarikh_lahir" name="tarikh_lahir">
                 </div>
                 <div class="form-group">
                   <label for="umur">Umur</label>
@@ -44,7 +44,7 @@ export class AIRTab extends BaseTab {
                 </div>
                 <div class="form-group">
                   <label for="hubungan">Hubungan dengan KIR</label>
-                  <select id="hubungan" name="hubungan" required>
+                  <select id="hubungan" name="hubungan">
                     <option value="">Pilih Hubungan</option>
                     <option value="Suami">Suami</option>
                     <option value="Isteri">Isteri</option>
@@ -404,8 +404,8 @@ export class AIRTab extends BaseTab {
           </div>
           
           <div class="form-group">
-            <label for="air_nama">Nama Penuh *</label>
-            <input type="text" id="air_nama" name="nama" value="${data.nama || ''}" required>
+            <label for="air_nama">Nama Penuh</label>
+            <input type="text" id="air_nama" name="nama" value="${data.nama || ''}">
           </div>
           
           <div class="form-row">
@@ -422,13 +422,13 @@ export class AIRTab extends BaseTab {
           
           <div class="form-row">
             <div class="form-group">
-              <label for="air_tarikh_lahir">Tarikh Lahir *</label>
-              <input type="date" id="air_tarikh_lahir" name="tarikh_lahir" value="${data.tarikh_lahir || ''}" required>
+              <label for="air_tarikh_lahir">Tarikh Lahir</label>
+              <input type="date" id="air_tarikh_lahir" name="tarikh_lahir" value="${data.tarikh_lahir || ''}">
             </div>
             
             <div class="form-group">
-              <label for="air_hubungan">Hubungan *</label>
-              <select id="air_hubungan" name="hubungan" required>
+              <label for="air_hubungan">Hubungan</label>
+              <select id="air_hubungan" name="hubungan">
                 <option value="">Pilih Hubungan</option>
                 <option value="Suami" ${data.hubungan === 'Suami' ? 'selected' : ''}>Suami</option>
                 <option value="Isteri" ${data.hubungan === 'Isteri' ? 'selected' : ''}>Isteri</option>

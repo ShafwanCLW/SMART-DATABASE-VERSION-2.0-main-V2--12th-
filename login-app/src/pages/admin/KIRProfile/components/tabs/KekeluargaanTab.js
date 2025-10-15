@@ -37,8 +37,8 @@ export class KekeluargaanTab extends BaseTab {
   createMaritalStatusSection(data) {
     return `
       <div class="form-group">
-        <label for="status_perkahwinan">Status Perkahwinan *</label>
-        <select id="status_perkahwinan" name="status_perkahwinan" required>
+        <label for="status_perkahwinan">Status Perkahwinan</label>
+        <select id="status_perkahwinan" name="status_perkahwinan">
           <option value="">Pilih Status</option>
           <option value="Bujang" ${data.status_perkahwinan === 'Bujang' ? 'selected' : ''}>Bujang</option>
           <option value="Berkahwin" ${data.status_perkahwinan === 'Berkahwin' ? 'selected' : ''}>Berkahwin</option>

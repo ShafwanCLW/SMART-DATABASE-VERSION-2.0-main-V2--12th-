@@ -519,15 +519,15 @@ export class KIRProfile {
             </div>
             
             <div class="form-group">
-              <label for="no_kp">No. KP *</label>
+              <label for="no_kp">No. KP</label>
               <input type="text" id="no_kp" name="no_kp" value="${data.no_kp || ''}" readonly>
             </div>
           </div>
           
           <div class="form-row">
             <div class="form-group">
-              <label for="tarikh_lahir">Tarikh Lahir *</label>
-              <input type="date" id="tarikh_lahir" name="tarikh_lahir" value="${data.tarikh_lahir || ''}" required>
+              <label for="tarikh_lahir">Tarikh Lahir</label>
+              <input type="date" id="tarikh_lahir" name="tarikh_lahir" value="${data.tarikh_lahir || ''}">
             </div>
             
             <div class="form-group">
@@ -538,8 +538,8 @@ export class KIRProfile {
           
           <div class="form-row">
             <div class="form-group">
-              <label for="jantina">Jantina *</label>
-              <select id="jantina" name="jantina" required>
+              <label for="jantina">Jantina</label>
+              <select id="jantina" name="jantina">
                 <option value="">Pilih Jantina</option>
                 <option value="Lelaki" ${data.jantina === 'Lelaki' ? 'selected' : ''}>Lelaki</option>
                 <option value="Perempuan" ${data.jantina === 'Perempuan' ? 'selected' : ''}>Perempuan</option>
@@ -547,8 +547,8 @@ export class KIRProfile {
             </div>
             
             <div class="form-group">
-              <label for="bangsa">Bangsa *</label>
-              <select id="bangsa" name="bangsa" required>
+              <label for="bangsa">Bangsa</label>
+              <select id="bangsa" name="bangsa">
                 <option value="">Pilih Bangsa</option>
                 <option value="Melayu" ${data.bangsa === 'Melayu' ? 'selected' : ''}>Melayu</option>
                 <option value="Cina" ${data.bangsa === 'Cina' ? 'selected' : ''}>Cina</option>
@@ -560,8 +560,8 @@ export class KIRProfile {
           
           <div class="form-row">
             <div class="form-group">
-              <label for="agama">Agama *</label>
-              <select id="agama" name="agama" required>
+              <label for="agama">Agama</label>
+              <select id="agama" name="agama">
                 <option value="">Pilih Agama</option>
                 <option value="Islam" ${data.agama === 'Islam' ? 'selected' : ''}>Islam</option>
                 <option value="Kristian" ${data.agama === 'Kristian' ? 'selected' : ''}>Kristian</option>
@@ -572,8 +572,8 @@ export class KIRProfile {
             </div>
             
             <div class="form-group">
-              <label for="status_perkahwinan">Status Perkahwinan *</label>
-              <select id="status_perkahwinan" name="status_perkahwinan" required>
+              <label for="status_perkahwinan">Status Perkahwinan</label>
+              <select id="status_perkahwinan" name="status_perkahwinan">
                 <option value="">Pilih Status</option>
                 <option value="Bujang" ${data.status_perkahwinan === 'Bujang' ? 'selected' : ''}>Bujang</option>
                 <option value="Berkahwin" ${data.status_perkahwinan === 'Berkahwin' ? 'selected' : ''}>Berkahwin</option>
@@ -585,8 +585,8 @@ export class KIRProfile {
           
           <div class="form-row">
             <div class="form-group">
-              <label for="telefon_utama">Telefon Utama *</label>
-              <input type="tel" id="telefon_utama" name="telefon_utama" value="${data.telefon_utama || ''}" required>
+              <label for="telefon_utama">Telefon Utama</label>
+              <input type="tel" id="telefon_utama" name="telefon_utama" value="${data.telefon_utama || ''}">
             </div>
             
             <div class="form-group">
@@ -596,26 +596,26 @@ export class KIRProfile {
           </div>
           
           <div class="form-group">
-            <label for="alamat">Alamat *</label>
-            <textarea id="alamat" name="alamat" rows="3" required>${data.alamat || ''}</textarea>
+            <label for="alamat">Alamat</label>
+            <textarea id="alamat" name="alamat" rows="3">${data.alamat || ''}</textarea>
           </div>
           
           <div class="form-row">
             <div class="form-group">
-              <label for="poskod">Poskod *</label>
-              <input type="text" id="poskod" name="poskod" value="${data.poskod || ''}" required>
+              <label for="poskod">Poskod</label>
+              <input type="text" id="poskod" name="poskod" value="${data.poskod || ''}">
             </div>
             
             <div class="form-group">
-              <label for="bandar">Bandar *</label>
-              <input type="text" id="bandar" name="bandar" value="${data.bandar || ''}" required>
+              <label for="bandar">Bandar</label>
+              <input type="text" id="bandar" name="bandar" value="${data.bandar || ''}">
             </div>
           </div>
           
           <div class="form-row">
             <div class="form-group">
-              <label for="negeri">Negeri *</label>
-              <select id="negeri" name="negeri" required>
+              <label for="negeri">Negeri</label>
+              <select id="negeri" name="negeri">
                 <option value="">Pilih Negeri</option>
                 <option value="Johor" ${data.negeri === 'Johor' ? 'selected' : ''}>Johor</option>
                 <option value="Kedah" ${data.negeri === 'Kedah' ? 'selected' : ''}>Kedah</option>

@@ -27,20 +27,20 @@ export class PKIRTab extends BaseTab {
           
           <div class="form-row">
             <div class="form-group">
-              <label for="nama_pasangan">Nama Pasangan *</label>
-              <input type="text" id="nama_pasangan" name="nama_pasangan" required>
+              <label for="nama_pasangan">Nama Pasangan</label>
+              <input type="text" id="nama_pasangan" name="nama_pasangan">
             </div>
             
             <div class="form-group">
-              <label for="no_kp_pasangan">No. KP Pasangan *</label>
-              <input type="text" id="no_kp_pasangan" name="no_kp_pasangan" required>
+              <label for="no_kp_pasangan">No. KP Pasangan</label>
+              <input type="text" id="no_kp_pasangan" name="no_kp_pasangan">
             </div>
           </div>
           
           <div class="form-row">
             <div class="form-group">
-              <label for="tarikh_lahir_pasangan">Tarikh Lahir *</label>
-              <input type="date" id="tarikh_lahir_pasangan" name="tarikh_lahir_pasangan" required>
+              <label for="tarikh_lahir_pasangan">Tarikh Lahir</label>
+              <input type="date" id="tarikh_lahir_pasangan" name="tarikh_lahir_pasangan">
             </div>
             
             <div class="form-group">
@@ -51,8 +51,8 @@ export class PKIRTab extends BaseTab {
           
           <div class="form-row">
             <div class="form-group">
-              <label for="jantina_pasangan">Jantina *</label>
-              <select id="jantina_pasangan" name="jantina_pasangan" required>
+              <label for="jantina_pasangan">Jantina</label>
+              <select id="jantina_pasangan" name="jantina_pasangan">
                 <option value="">Pilih Jantina</option>
                 <option value="Lelaki">Lelaki</option>
                 <option value="Perempuan">Perempuan</option>
