@@ -3257,7 +3257,7 @@ export function setupProgramKehadiranNewestListeners() {
 export function setupFinancialTrackingNewestListeners() {
   const newestNav = document.querySelector('[data-section="financial-tracking-newest"]');
 
-  const loadNewestTracking = async () => {
+  const loadNewestTracking = async ({ forceShow = false } = {}) => {
     try {
       const container = document.getElementById('financial-tracking-newest-content');
       if (!container) {
@@ -3266,6 +3266,14 @@ export function setupFinancialTrackingNewestListeners() {
       }
 
       if (container.dataset.financialNewestLoaded === 'true' && window.financialTrackingNewest) {
+        if (forceShow) {
+          if (typeof window.financialTrackingNewest.showSection === 'function') {
+            window.financialTrackingNewest.showSection('overview');
+          }
+          if (typeof window.financialTrackingNewest.refreshSummary === 'function') {
+            window.financialTrackingNewest.refreshSummary();
+          }
+        }
         return;
       }
 
@@ -3277,6 +3285,12 @@ export function setupFinancialTrackingNewestListeners() {
       try {
         await module.initialize();
         container.dataset.financialNewestLoaded = 'true';
+        if (typeof module.showSection === 'function') {
+          module.showSection('overview');
+        }
+        if (typeof module.refreshSummary === 'function') {
+          module.refreshSummary();
+        }
       } catch (initError) {
         console.error('Error initializing Financial Tracking (Newest):', initError);
       }
@@ -3288,13 +3302,13 @@ export function setupFinancialTrackingNewestListeners() {
   if (newestNav) {
     newestNav.addEventListener('click', (event) => {
       event.preventDefault();
-      setTimeout(loadNewestTracking, 100);
+      setTimeout(() => loadNewestTracking({ forceShow: true }), 100);
     });
   }
 
   const initialContainer = document.getElementById('financial-tracking-newest-content');
   if (initialContainer && initialContainer.classList.contains('active')) {
-    setTimeout(loadNewestTracking, 100);
+    setTimeout(() => loadNewestTracking({ forceShow: true }), 100);
   }
 }
 
