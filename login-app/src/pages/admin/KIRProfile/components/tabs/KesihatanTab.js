@@ -31,48 +31,30 @@ export class KesihatanTab extends BaseTab {
   }
 
   createKesihatanSectionNavigation() {
-    const sections = [
-      { id: 'ringkasan', label: 'Ringkasan Kesihatan', icon: 'heart' },
-      { id: 'ubat-tetap', label: 'Ubat-ubatan Tetap', icon: 'pills' },
-      { id: 'rawatan', label: 'Rawatan / Follow-up Berkala', icon: 'calendar-check' },
-      { id: 'pembedahan', label: 'Sejarah Pembedahan', icon: 'cut' }
-    ];
-
-    const sectionsHTML = sections.map(section => {
-      const isActive = section.id === this.currentKesihatanSection;
-      const isDirty = this.kesihatanDirtyTabs?.has(section.id) || false;
-      
-      return `
-        <button class="kesihatan-section-btn ${isActive ? 'active' : ''}" 
-                data-section="${section.id}" 
-                onclick="kesihatanTab.switchKesihatanSection('${section.id}')">
-          <i class="fas fa-${section.icon}"></i>
-          ${section.label}
-          ${isDirty ? '<span class="dirty-indicator">•</span>' : ''}
-        </button>
-      `;
-    }).join('');
-
+    // Navigation removed: Kesihatan is now a single flow page
     return `
-      <div class="kesihatan-section-navigation">
-        ${sectionsHTML}
-      </div>
+      <div class="kesihatan-section-navigation"></div>
     `;
   }
 
   createKesihatanSectionContent() {
-    switch (this.currentKesihatanSection) {
-      case 'ringkasan':
-        return this.createRingkasanKesihatanSection();
-      case 'ubat-tetap':
-        return this.createUbatTetapSection();
-      case 'rawatan':
-        return this.createRawatanSection();
-      case 'pembedahan':
-        return this.createPembedahanSection();
-      default:
-        return this.createRingkasanKesihatanSection();
-    }
+    // Single-flow: render all sections sequentially
+    const content = [
+      this.createRingkasanKesihatanSection(),
+      this.createUbatTetapSection(),
+      this.createRawatanSection(),
+      this.createPembedahanSection(),
+      // Bottom page actions: move Simpan Ringkasan Kesihatan button here
+      `
+      <div class="page-actions">
+        <button type="button" class="btn btn-primary" onclick="kesihatanTab.save()">
+          <i class="fas fa-save"></i> Simpan Ringkasan Kesihatan
+        </button>
+      </div>
+      `
+    ].join('');
+
+    return content;
   }
 
   createRingkasanKesihatanSection() {
@@ -80,8 +62,8 @@ export class KesihatanTab extends BaseTab {
     
     const kumpulanDarah = data.kumpulan_darah || data.blood_type || '';
     const penyakitKronik = data.penyakit_kronik || data.chronic_diseases || [];
-    const ringkasanKesihatan = data.ringkasan_kesihatan || data.health_summary || '';
     const catatanKesihatan = data.catatan_kesihatan || '';
+    const statusMerokok = data.status_merokok || '';
     
     return `
       <form class="kesihatan-form" data-section="ringkasan">
@@ -101,6 +83,14 @@ export class KesihatanTab extends BaseTab {
                 <option value="AB-" ${kumpulanDarah === 'AB-' ? 'selected' : ''}>AB-</option>
                 <option value="O+" ${kumpulanDarah === 'O+' ? 'selected' : ''}>O+</option>
                 <option value="O-" ${kumpulanDarah === 'O-' ? 'selected' : ''}>O-</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="status_merokok">Status Merokok</label>
+              <select id="status_merokok" name="status_merokok">
+                <option value="">Pilih Status</option>
+                <option value="Ya" ${statusMerokok === 'Ya' ? 'selected' : ''}>Ya</option>
+                <option value="Tidak" ${statusMerokok === 'Tidak' ? 'selected' : ''}>Tidak</option>
               </select>
             </div>
           </div>
@@ -136,20 +126,11 @@ export class KesihatanTab extends BaseTab {
           </div>
           
           <div class="form-group">
-            <label for="ringkasan_kesihatan">Ringkasan Kesihatan</label>
-            <textarea id="ringkasan_kesihatan" name="ringkasan_kesihatan" rows="3" placeholder="Ringkasan keseluruhan kesihatan...">${FormHelpers.escapeHtml(ringkasanKesihatan)}</textarea>
-          </div>
-          
-          <div class="form-group">
-            <label for="catatan_kesihatan">Catatan Kesihatan</label>
+            <label for="catatan_kesihatan">Catatan Tahap Kesihatan</label>
             <textarea id="catatan_kesihatan" name="catatan_kesihatan" rows="4" placeholder="Catatan tambahan mengenai kesihatan...">${FormHelpers.escapeHtml(catatanKesihatan)}</textarea>
           </div>
           
-          <div class="form-actions">
-            <button type="submit" class="btn btn-primary">
-              <i class="fas fa-save"></i> Simpan Ringkasan Kesihatan
-            </button>
-          </div>
+          <!-- Save button moved to bottom page actions -->
         </div>
       </form>
     `;
@@ -158,22 +139,9 @@ export class KesihatanTab extends BaseTab {
   createUbatTetapSection() {
     const data = this.kirProfile.relatedData?.kesihatan?.ubat_tetap || [];
     
-    if (data.length === 0) {
-      return `
-        <div class="empty-state">
-          <div class="empty-state-icon">
-            <i class="fas fa-pills"></i>
-          </div>
-          <h4>Tiada Ubat-ubatan Tetap</h4>
-          <p>Belum ada maklumat ubat-ubatan tetap yang didaftarkan.</p>
-          <button class="btn btn-primary" onclick="kesihatanTab.addUbatTetapKIR()">
-            <i class="fas fa-plus"></i> Tambah Ubat Pertama
-          </button>
-        </div>
-      `;
-    }
-    
-    const tableRows = data.map((ubat, index) => `
+    const tableRows = (data.length === 0)
+      ? `<tr class="empty-row"><td colspan="5">Tiada Ubat-ubatan Tetap</td></tr>`
+      : data.map((ubat, index) => `
       <tr>
         <td>${FormHelpers.escapeHtml(ubat.nama_ubat || '')}</td>
         <td>${FormHelpers.escapeHtml(ubat.dos || '')}</td>
@@ -222,22 +190,9 @@ export class KesihatanTab extends BaseTab {
   createRawatanSection() {
     const data = this.kirProfile.relatedData?.kesihatan?.rawatan || [];
     
-    if (data.length === 0) {
-      return `
-        <div class="empty-state">
-          <div class="empty-state-icon">
-            <i class="fas fa-calendar-check"></i>
-          </div>
-          <h4>Tiada Rawatan / Follow-up</h4>
-          <p>Belum ada maklumat rawatan atau follow-up berkala yang didaftarkan.</p>
-          <button class="btn btn-primary" onclick="kesihatanTab.addRawatanKIR()">
-            <i class="fas fa-plus"></i> Tambah Rawatan Pertama
-          </button>
-        </div>
-      `;
-    }
-    
-    const tableRows = data.map((rawatan, index) => `
+    const tableRows = (data.length === 0)
+      ? `<tr class="empty-row"><td colspan="4">Tiada Rawatan / Follow-up</td></tr>`
+      : data.map((rawatan, index) => `
       <tr>
         <td>${FormHelpers.escapeHtml(rawatan.fasiliti || '')}</td>
         <td>${rawatan.tarikh ? new Date(rawatan.tarikh).toLocaleDateString('ms-MY') : ''}</td>
@@ -284,24 +239,11 @@ export class KesihatanTab extends BaseTab {
   createPembedahanSection() {
     const data = this.kirProfile.relatedData?.kesihatan?.pembedahan || [];
     
-    if (data.length === 0) {
-      return `
-        <div class="empty-state">
-          <div class="empty-state-icon">
-            <i class="fas fa-cut"></i>
-          </div>
-          <h4>Tiada Sejarah Pembedahan</h4>
-          <p>Belum ada maklumat sejarah pembedahan yang didaftarkan.</p>
-          <button class="btn btn-primary" onclick="kesihatanTab.addPembedahanKIR()">
-            <i class="fas fa-plus"></i> Tambah Pembedahan Pertama
-          </button>
-        </div>
-      `;
-    }
-    
-    const timelineItems = data
-      .sort((a, b) => new Date(b.tarikh) - new Date(a.tarikh))
-      .map(pembedahan => `
+    const timelineItems = (data.length === 0)
+      ? `<div class="empty-row">Tiada Sejarah Pembedahan</div>`
+      : data
+        .sort((a, b) => new Date(b.tarikh) - new Date(a.tarikh))
+        .map(pembedahan => `
         <div class="timeline-item">
           <div class="timeline-marker"></div>
           <div class="timeline-content">
@@ -319,7 +261,9 @@ export class KesihatanTab extends BaseTab {
         </div>
       `).join('');
     
-    const tableRows = data.map((pembedahan, index) => `
+    const tableRows = (data.length === 0)
+      ? `<tr class="empty-row"><td colspan="5">Tiada Sejarah Pembedahan</td></tr>`
+      : data.map((pembedahan, index) => `
       <tr>
         <td>${pembedahan.tarikh ? new Date(pembedahan.tarikh).toLocaleDateString('ms-MY') : ''}</td>
         <td>${FormHelpers.escapeHtml(pembedahan.jenis_pembedahan || '')}</td>
@@ -415,6 +359,7 @@ export class KesihatanTab extends BaseTab {
   addUbatTetapKIR() {
     const modal = this.createUbatTetapModal();
     document.body.insertAdjacentHTML('beforeend', modal);
+    this.ensureModalStyles();
   }
 
   editUbatTetapKIR(index) {
@@ -423,6 +368,7 @@ export class KesihatanTab extends BaseTab {
     
     const modal = this.createUbatTetapModal(ubat, index);
     document.body.insertAdjacentHTML('beforeend', modal);
+    this.ensureModalStyles();
   }
 
   async deleteUbatTetapKIR(index) {
@@ -464,37 +410,47 @@ export class KesihatanTab extends BaseTab {
               <i class="fas fa-times"></i>
             </button>
           </div>
+          <div class="wizard-steps">
+            <div class="step-indicator active">Langkah 1</div>
+            <div class="step-indicator">Langkah 2</div>
+          </div>
           
           <form class="modal-form" onsubmit="kesihatanTab.saveUbatTetapKIR(event, ${index})">
-            <div class="form-group">
-              <label for="nama_ubat">Nama Ubat *</label>
-              <input type="text" id="nama_ubat" name="nama_ubat" value="${FormHelpers.escapeHtml(ubat?.nama_ubat || '')}" required>
-            </div>
-            
-            <div class="form-row">
+            <div class="wizard-step active">
               <div class="form-group">
-                <label for="dos">Dos</label>
-                <input type="text" id="dos" name="dos" value="${FormHelpers.escapeHtml(ubat?.dos || '')}" placeholder="Contoh: 500mg">
+                <label for="nama_ubat">Nama Ubat *</label>
+                <input type="text" id="nama_ubat" name="nama_ubat" value="${FormHelpers.escapeHtml(ubat?.nama_ubat || '')}" required>
               </div>
               
-              <div class="form-group">
-                <label for="kekerapan">Kekerapan</label>
-                <input type="text" id="kekerapan" name="kekerapan" value="${FormHelpers.escapeHtml(ubat?.kekerapan || '')}" placeholder="Contoh: 2 kali sehari">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="dos">Dos</label>
+                  <input type="text" id="dos" name="dos" value="${FormHelpers.escapeHtml(ubat?.dos || '')}" placeholder="Contoh: 500mg">
+                </div>
+                
+                <div class="form-group">
+                  <label for="kekerapan">Kekerapan</label>
+                  <input type="text" id="kekerapan" name="kekerapan" value="${FormHelpers.escapeHtml(ubat?.kekerapan || '')}" placeholder="Contoh: 2 kali sehari">
+                </div>
+              </div>
+              
+              <div class="wizard-actions">
+                <button type="button" class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Batal</button>
+                <button type="button" class="btn btn-primary" onclick="kesihatanTab.nextWizardStep(this)">Seterusnya</button>
               </div>
             </div>
             
-            <div class="form-group">
-              <label for="catatan">Catatan</label>
-              <textarea id="catatan" name="catatan" rows="3" placeholder="Catatan tambahan...">${FormHelpers.escapeHtml(ubat?.catatan || '')}</textarea>
-            </div>
-            
-            <div class="modal-actions">
-              <button type="button" class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">
-                Batal
-              </button>
-              <button type="submit" class="btn btn-primary">
-                <i class="fas fa-save"></i> ${isEdit ? 'Kemaskini' : 'Simpan'}
-              </button>
+            <div class="wizard-step">
+              <div class="form-group">
+                <label for="catatan">Catatan</label>
+                <textarea id="catatan" name="catatan" rows="3" placeholder="Catatan tambahan...">${FormHelpers.escapeHtml(ubat?.catatan || '')}</textarea>
+              </div>
+              <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="kesihatanTab.prevWizardStep(this)">Kembali</button>
+                <button type="submit" class="btn btn-primary">
+                  <i class="fas fa-save"></i> ${isEdit ? 'Kemaskini' : 'Simpan'}
+                </button>
+              </div>
             </div>
           </form>
         </div>
@@ -546,34 +502,239 @@ export class KesihatanTab extends BaseTab {
 
   // Rawatan Methods
   addRawatanKIR() {
-    // Implementation for adding rawatan
-    console.log('Add rawatan - to be implemented');
+    const modal = this.createRawatanModal();
+    document.body.insertAdjacentHTML('beforeend', modal);
+    this.ensureModalStyles();
   }
 
   editRawatanKIR(index) {
-    // Implementation for editing rawatan
-    console.log('Edit rawatan - to be implemented');
+    const rawatan = this.kirProfile.relatedData?.kesihatan?.rawatan?.[index];
+    if (!rawatan) return;
+    const modal = this.createRawatanModal(rawatan, index);
+    document.body.insertAdjacentHTML('beforeend', modal);
+    this.ensureModalStyles();
   }
 
   async deleteRawatanKIR(index) {
-    // Implementation for deleting rawatan
-    console.log('Delete rawatan - to be implemented');
+    if (!confirm('Adakah anda pasti mahu memadam rawatan ini?')) return;
+    try {
+      const rawatan = [...(this.kirProfile.relatedData?.kesihatan?.rawatan || [])];
+      rawatan.splice(index, 1);
+      const kesihatanData = { ...this.kirProfile.relatedData?.kesihatan };
+      kesihatanData.rawatan = rawatan;
+      kesihatanData.updated_at = new Date().toISOString();
+      await this.kirProfile.KIRService.updateRelatedDocument(this.kirProfile.kirId, 'kesihatan', kesihatanData);
+      if (!this.kirProfile.relatedData.kesihatan) this.kirProfile.relatedData.kesihatan = {};
+      this.kirProfile.relatedData.kesihatan.rawatan = rawatan;
+      this.kirProfile.relatedData.kesihatan.updated_at = kesihatanData.updated_at;
+      this.kirProfile.showToast('Rawatan berjaya dipadam', 'success');
+      this.refreshKesihatanSection();
+    } catch (error) {
+      console.error('Error deleting rawatan:', error);
+      this.kirProfile.showToast('Ralat memadam rawatan: ' + error.message, 'error');
+    }
+  }
+
+  createRawatanModal(rawatan = null, index = null) {
+    const isEdit = rawatan !== null;
+    return `
+      <div class="modal-overlay" onclick="this.remove()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+          <div class="modal-header">
+            <h4>${isEdit ? 'Edit' : 'Tambah'} Rawatan / Follow-up</h4>
+            <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="wizard-steps">
+            <div class="step-indicator active">Langkah 1</div>
+            <div class="step-indicator">Langkah 2</div>
+          </div>
+          <form class="modal-form" onsubmit="kesihatanTab.saveRawatanKIR(event, ${index})">
+            <div class="wizard-step active">
+              <div class="form-group">
+                <label for="fasiliti">Fasiliti *</label>
+                <input type="text" id="fasiliti" name="fasiliti" value="${FormHelpers.escapeHtml(rawatan?.fasiliti || '')}" required placeholder="Contoh: Hospital Kuala Lumpur">
+              </div>
+              <div class="form-group">
+                <label for="tarikh">Tarikh *</label>
+                <input type="date" id="tarikh" name="tarikh" value="${FormHelpers.escapeHtml(rawatan?.tarikh || '')}" required>
+              </div>
+              <div class="wizard-actions">
+                <button type="button" class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Batal</button>
+                <button type="button" class="btn btn-primary" onclick="kesihatanTab.nextWizardStep(this)">Seterusnya</button>
+              </div>
+            </div>
+            <div class="wizard-step">
+              <div class="form-group">
+                <label for="catatan">Catatan</label>
+                <textarea id="catatan" name="catatan" rows="3" placeholder="Catatan rawatan...">${FormHelpers.escapeHtml(rawatan?.catatan || '')}</textarea>
+              </div>
+              <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="kesihatanTab.prevWizardStep(this)">Kembali</button>
+                <button type="submit" class="btn btn-primary">
+                  <i class="fas fa-save"></i> ${isEdit ? 'Kemaskini' : 'Simpan'}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+  }
+
+  async saveRawatanKIR(event, index = null) {
+    event.preventDefault();
+    try {
+      const formData = new FormData(event.target);
+      const rawatanData = {
+        fasiliti: formData.get('fasiliti'),
+        tarikh: formData.get('tarikh'),
+        catatan: formData.get('catatan')
+      };
+      const rawatan = [...(this.kirProfile.relatedData?.kesihatan?.rawatan || [])];
+      if (index !== null) {
+        rawatan[index] = rawatanData;
+      } else {
+        rawatan.push(rawatanData);
+      }
+      const kesihatanData = { ...this.kirProfile.relatedData?.kesihatan };
+      kesihatanData.rawatan = rawatan;
+      kesihatanData.updated_at = new Date().toISOString();
+      await this.kirProfile.KIRService.updateRelatedDocument(this.kirProfile.kirId, 'kesihatan', kesihatanData);
+      if (!this.kirProfile.relatedData.kesihatan) this.kirProfile.relatedData.kesihatan = {};
+      this.kirProfile.relatedData.kesihatan.rawatan = rawatan;
+      this.kirProfile.relatedData.kesihatan.updated_at = kesihatanData.updated_at;
+      this.kirProfile.showToast(`Rawatan berjaya ${index !== null ? 'dikemaskini' : 'ditambah'}`, 'success');
+      this.refreshKesihatanSection();
+      document.querySelector('.modal-overlay')?.remove();
+    } catch (error) {
+      console.error('Error saving rawatan:', error);
+      this.kirProfile.showToast('Ralat menyimpan rawatan: ' + error.message, 'error');
+    }
   }
 
   // Pembedahan Methods
   addPembedahanKIR() {
-    // Implementation for adding pembedahan
-    console.log('Add pembedahan - to be implemented');
+    const modal = this.createPembedahanModal();
+    document.body.insertAdjacentHTML('beforeend', modal);
+    this.ensureModalStyles();
   }
 
   editPembedahanKIR(index) {
-    // Implementation for editing pembedahan
-    console.log('Edit pembedahan - to be implemented');
+    const pembedahan = this.kirProfile.relatedData?.kesihatan?.pembedahan?.[index];
+    if (!pembedahan) return;
+    const modal = this.createPembedahanModal(pembedahan, index);
+    document.body.insertAdjacentHTML('beforeend', modal);
+    this.ensureModalStyles();
   }
 
   async deletePembedahanKIR(index) {
-    // Implementation for deleting pembedahan
-    console.log('Delete pembedahan - to be implemented');
+    if (!confirm('Adakah anda pasti mahu memadam pembedahan ini?')) return;
+    try {
+      const pembedahan = [...(this.kirProfile.relatedData?.kesihatan?.pembedahan || [])];
+      pembedahan.splice(index, 1);
+      const kesihatanData = { ...this.kirProfile.relatedData?.kesihatan };
+      kesihatanData.pembedahan = pembedahan;
+      kesihatanData.updated_at = new Date().toISOString();
+      await this.kirProfile.KIRService.updateRelatedDocument(this.kirProfile.kirId, 'kesihatan', kesihatanData);
+      if (!this.kirProfile.relatedData.kesihatan) this.kirProfile.relatedData.kesihatan = {};
+      this.kirProfile.relatedData.kesihatan.pembedahan = pembedahan;
+      this.kirProfile.relatedData.kesihatan.updated_at = kesihatanData.updated_at;
+      this.kirProfile.showToast('Pembedahan berjaya dipadam', 'success');
+      this.refreshKesihatanSection();
+    } catch (error) {
+      console.error('Error deleting pembedahan:', error);
+      this.kirProfile.showToast('Ralat memadam pembedahan: ' + error.message, 'error');
+    }
+  }
+
+  createPembedahanModal(pembedahan = null, index = null) {
+    const isEdit = pembedahan !== null;
+    return `
+      <div class="modal-overlay" onclick="this.remove()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+          <div class="modal-header">
+            <h4>${isEdit ? 'Edit' : 'Tambah'} Sejarah Pembedahan</h4>
+            <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="wizard-steps">
+            <div class="step-indicator active">Langkah 1</div>
+            <div class="step-indicator">Langkah 2</div>
+          </div>
+          <form class="modal-form" onsubmit="kesihatanTab.savePembedahanKIR(event, ${index})">
+            <div class="wizard-step active">
+              <div class="form-group">
+                <label for="tarikh">Tarikh *</label>
+                <input type="date" id="tarikh" name="tarikh" value="${FormHelpers.escapeHtml(pembedahan?.tarikh || '')}" required>
+              </div>
+              <div class="form-group">
+                <label for="jenis_pembedahan">Jenis Pembedahan *</label>
+                <input type="text" id="jenis_pembedahan" name="jenis_pembedahan" value="${FormHelpers.escapeHtml(pembedahan?.jenis_pembedahan || '')}" required placeholder="Contoh: Appendectomy">
+              </div>
+              <div class="wizard-actions">
+                <button type="button" class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Batal</button>
+                <button type="button" class="btn btn-primary" onclick="kesihatanTab.nextWizardStep(this)">Seterusnya</button>
+              </div>
+            </div>
+            <div class="wizard-step">
+              <div class="form-group">
+                <label for="hospital">Hospital *</label>
+                <input type="text" id="hospital" name="hospital" value="${FormHelpers.escapeHtml(pembedahan?.hospital || '')}" required placeholder="Contoh: Hospital Kuala Lumpur">
+              </div>
+              <div class="form-group">
+                <label for="status">Status *</label>
+                <select id="status" name="status" required>
+                  <option value="">Pilih Status</option>
+                  <option value="Selesai" ${pembedahan?.status === 'Selesai' ? 'selected' : ''}>Selesai</option>
+                  <option value="Perlu Follow-up" ${pembedahan?.status === 'Perlu Follow-up' ? 'selected' : ''}>Perlu Follow-up</option>
+                </select>
+              </div>
+              <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="kesihatanTab.prevWizardStep(this)">Kembali</button>
+                <button type="submit" class="btn btn-primary">
+                  <i class="fas fa-save"></i> ${isEdit ? 'Kemaskini' : 'Simpan'}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+  }
+
+  async savePembedahanKIR(event, index = null) {
+    event.preventDefault();
+    try {
+      const formData = new FormData(event.target);
+      const pembedahanData = {
+        tarikh: formData.get('tarikh'),
+        jenis_pembedahan: formData.get('jenis_pembedahan'),
+        hospital: formData.get('hospital'),
+        status: formData.get('status')
+      };
+      const pembedahan = [...(this.kirProfile.relatedData?.kesihatan?.pembedahan || [])];
+      if (index !== null) {
+        pembedahan[index] = pembedahanData;
+      } else {
+        pembedahan.push(pembedahanData);
+      }
+      const kesihatanData = { ...this.kirProfile.relatedData?.kesihatan };
+      kesihatanData.pembedahan = pembedahan;
+      kesihatanData.updated_at = new Date().toISOString();
+      await this.kirProfile.KIRService.updateRelatedDocument(this.kirProfile.kirId, 'kesihatan', kesihatanData);
+      if (!this.kirProfile.relatedData.kesihatan) this.kirProfile.relatedData.kesihatan = {};
+      this.kirProfile.relatedData.kesihatan.pembedahan = pembedahan;
+      this.kirProfile.relatedData.kesihatan.updated_at = kesihatanData.updated_at;
+      this.kirProfile.showToast(`Pembedahan berjaya ${index !== null ? 'dikemaskini' : 'ditambah'}`, 'success');
+      this.refreshKesihatanSection();
+      document.querySelector('.modal-overlay')?.remove();
+    } catch (error) {
+      console.error('Error saving pembedahan:', error);
+      this.kirProfile.showToast('Ralat menyimpan pembedahan: ' + error.message, 'error');
+    }
   }
 
   refreshKesihatanSection() {
@@ -594,6 +755,7 @@ export class KesihatanTab extends BaseTab {
   setupEventListeners() {
     // Make the tab instance globally accessible for onclick handlers
     window.kesihatanTab = this;
+    this.ensureModalStyles();
     
     // Set up form change tracking for the current section
     const form = document.querySelector('.kesihatan-form');
@@ -608,6 +770,64 @@ export class KesihatanTab extends BaseTab {
         this.updateKesihatanSectionNavigation();
       });
     }
+  }
+
+  // Wizard navigation helpers
+  nextWizardStep(buttonEl) {
+    const modal = buttonEl.closest('.modal-content');
+    if (!modal) return;
+    const steps = modal.querySelectorAll('.wizard-step');
+    const indicators = modal.querySelectorAll('.step-indicator');
+    let activeIndex = 0;
+    steps.forEach((step, i) => { if (step.classList.contains('active')) activeIndex = i; });
+    if (activeIndex < steps.length - 1) {
+      steps[activeIndex].classList.remove('active');
+      steps[activeIndex + 1].classList.add('active');
+      if (indicators[activeIndex]) indicators[activeIndex].classList.remove('active');
+      if (indicators[activeIndex + 1]) indicators[activeIndex + 1].classList.add('active');
+    }
+  }
+
+  prevWizardStep(buttonEl) {
+    const modal = buttonEl.closest('.modal-content');
+    if (!modal) return;
+    const steps = modal.querySelectorAll('.wizard-step');
+    const indicators = modal.querySelectorAll('.step-indicator');
+    let activeIndex = 0;
+    steps.forEach((step, i) => { if (step.classList.contains('active')) activeIndex = i; });
+    if (activeIndex > 0) {
+      steps[activeIndex].classList.remove('active');
+      steps[activeIndex - 1].classList.add('active');
+      if (indicators[activeIndex]) indicators[activeIndex].classList.remove('active');
+      if (indicators[activeIndex - 1]) indicators[activeIndex - 1].classList.add('active');
+    }
+  }
+
+  // Ensure modal styles exist to prevent layout shrinking
+  ensureModalStyles() {
+    if (document.getElementById('kesihatan-modal-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'kesihatan-modal-styles';
+    style.textContent = `
+      .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background-color: rgba(0,0,0,0.5); display:flex; justify-content:center; align-items:center; z-index: 1000; }
+      .modal-content { background:#fff; border-radius:8px; box-shadow:0 10px 25px rgba(0,0,0,0.2); width: 92%; max-width: 600px; max-height: 90vh; overflow-y:auto; }
+      .modal-header { padding:16px; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center; }
+      .modal-header h4 { margin:0; font-size:18px; }
+      .modal-close { background:none; border:none; font-size:20px; color:#6b7280; cursor:pointer; }
+      .modal-form { padding:16px; }
+      .form-group { margin-bottom:12px; }
+      .form-row { display:flex; gap:12px; }
+      .form-row .form-group { flex:1; }
+      .modal-actions { display:flex; justify-content:flex-end; gap:12px; padding:16px; border-top:1px solid #e5e7eb; }
+      .wizard-steps { display:flex; gap:8px; padding:0 16px; margin:8px 0; }
+      .step-indicator { flex:1; text-align:center; padding:8px; border-radius:6px; border:1px solid #e5e7eb; background:#f9fafb; color:#374151; font-weight:500; }
+      .step-indicator.active { background:#2563eb; color:#fff; border-color:#2563eb; }
+      .wizard-step { display:none; }
+      .wizard-step.active { display:block; }
+      .wizard-actions { display:flex; justify-content:space-between; gap:12px; padding:16px 0; }
+      .page-actions { margin-top:24px; display:flex; justify-content:flex-end; }
+    `;
+    document.head.appendChild(style);
   }
 
   async save() {
@@ -634,7 +854,7 @@ export class KesihatanTab extends BaseTab {
       sectionData = {
         kumpulan_darah: formData.get('kumpulan_darah'),
         penyakit_kronik: penyakitKronik,
-        ringkasan_kesihatan: formData.get('ringkasan_kesihatan'),
+        status_merokok: formData.get('status_merokok'),
         catatan_kesihatan: formData.get('catatan_kesihatan')
       };
     } else {

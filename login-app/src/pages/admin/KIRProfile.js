@@ -437,7 +437,7 @@ export class KIRProfile {
       { id: 'pendidikan', label: 'Pendidikan Tertinggi', icon: 'fas fa-graduation-cap' },
       { id: 'pekerjaan', label: 'Pekerjaan', icon: 'fas fa-briefcase' },
       { id: 'kekeluargaan', label: 'Kekeluargaan', icon: 'fas fa-users' },
-      { id: 'kesihatan', label: 'Kesihatan KIR', icon: 'fas fa-heartbeat' },
+      { id: 'kesihatan', label: 'Kesihatan', icon: 'fas fa-heartbeat' },
       { id: 'pendapatan', label: 'Pendapatan', icon: 'fas fa-coins' },
       { id: 'perbelanjaan', label: 'Perbelanjaan', icon: 'fas fa-shopping-cart' },
       { id: 'bantuan-bulanan', label: 'Bantuan Bulanan', icon: 'fas fa-hand-holding-usd' },
