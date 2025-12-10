@@ -382,7 +382,7 @@ export class KesihatanTab extends BaseTab {
       kesihatanData.ubat_tetap = ubatTetap;
       kesihatanData.updated_at = new Date().toISOString();
       
-      await this.kirProfile.KIRService.updateRelatedDocument(this.kirProfile.kirId, 'kesihatan', kesihatanData);
+      await this.kirProfile.kirService.updateRelatedDocument(this.kirProfile.kirId, 'kesihatan', kesihatanData);
       
       // Update local data
       if (!this.kirProfile.relatedData.kesihatan) this.kirProfile.relatedData.kesihatan = {};
@@ -405,47 +405,69 @@ export class KesihatanTab extends BaseTab {
       <div class="modal-overlay" onclick="this.remove()">
         <div class="modal-content" onclick="event.stopPropagation()">
           <div class="modal-header">
-            <h4>${isEdit ? 'Edit' : 'Tambah'} Ubat Tetap</h4>
+            <div class="modal-header-info">
+              <span class="modal-eyebrow">Ubat-ubatan Tetap</span>
+              <h4>${isEdit ? 'Kemaskini' : 'Tambah'} Ubat Tetap</h4>
+              <p class="modal-subtitle">Lengkapkan maklumat ubat untuk memastikan rekod kesihatan kekal tepat.</p>
+            </div>
             <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">
               <i class="fas fa-times"></i>
             </button>
           </div>
           <div class="wizard-steps">
-            <div class="step-indicator active">Langkah 1</div>
-            <div class="step-indicator">Langkah 2</div>
+            <div class="step-indicator active">
+              <span class="step-index">1</span>
+              <div class="step-label">
+                <span class="step-title">Maklumat Ubat</span>
+                <span class="step-subtitle">Nama, dos & kekerapan</span>
+              </div>
+            </div>
+            <div class="step-indicator">
+              <span class="step-index">2</span>
+              <div class="step-label">
+                <span class="step-title">Catatan & Semakan</span>
+                <span class="step-subtitle">Nota tambahan sebelum simpan</span>
+              </div>
+            </div>
           </div>
           
           <form class="modal-form" onsubmit="kesihatanTab.saveUbatTetapKIR(event, ${index})">
-            <div class="wizard-step active">
-              <div class="form-group">
-                <label for="nama_ubat">Nama Ubat *</label>
-                <input type="text" id="nama_ubat" name="nama_ubat" value="${FormHelpers.escapeHtml(ubat?.nama_ubat || '')}" required>
-              </div>
-              
-              <div class="form-row">
+            <div class="wizard-step active" data-step="1">
+              <div class="wizard-step-body">
+                <p class="wizard-intro">Isi maklumat asas ubat bagi membantu pegawai kesihatan membuat rujukan pantas.</p>
                 <div class="form-group">
-                  <label for="dos">Dos</label>
-                  <input type="text" id="dos" name="dos" value="${FormHelpers.escapeHtml(ubat?.dos || '')}" placeholder="Contoh: 500mg">
+                  <label for="nama_ubat">Nama Ubat *</label>
+                  <input type="text" id="nama_ubat" name="nama_ubat" value="${FormHelpers.escapeHtml(ubat?.nama_ubat || '')}" required placeholder="Contoh: Metformin 500mg">
                 </div>
                 
-                <div class="form-group">
-                  <label for="kekerapan">Kekerapan</label>
-                  <input type="text" id="kekerapan" name="kekerapan" value="${FormHelpers.escapeHtml(ubat?.kekerapan || '')}" placeholder="Contoh: 2 kali sehari">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="dos">Dos</label>
+                    <input type="text" id="dos" name="dos" value="${FormHelpers.escapeHtml(ubat?.dos || '')}" placeholder="Contoh: 500mg">
+                  </div>
+                  
+                  <div class="form-group">
+                    <label for="kekerapan">Kekerapan</label>
+                    <input type="text" id="kekerapan" name="kekerapan" value="${FormHelpers.escapeHtml(ubat?.kekerapan || '')}" placeholder="Contoh: 2 kali sehari">
+                  </div>
                 </div>
               </div>
               
-              <div class="wizard-actions">
+              <div class="wizard-footer">
                 <button type="button" class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Batal</button>
                 <button type="button" class="btn btn-primary" onclick="kesihatanTab.nextWizardStep(this)">Seterusnya</button>
               </div>
             </div>
             
-            <div class="wizard-step">
-              <div class="form-group">
-                <label for="catatan">Catatan</label>
-                <textarea id="catatan" name="catatan" rows="3" placeholder="Catatan tambahan...">${FormHelpers.escapeHtml(ubat?.catatan || '')}</textarea>
+            <div class="wizard-step" data-step="2">
+              <div class="wizard-step-body">
+                <p class="wizard-intro">Catatan membantu mengingat arahan atau perubahan terbaharu kepada ubat ini.</p>
+                <div class="form-group">
+                  <label for="catatan">Catatan</label>
+                  <textarea id="catatan" name="catatan" rows="4" placeholder="Catatan tambahan...">${FormHelpers.escapeHtml(ubat?.catatan || '')}</textarea>
+                </div>
               </div>
-              <div class="modal-actions">
+              <div class="wizard-footer wizard-footer--end">
                 <button type="button" class="btn btn-secondary" onclick="kesihatanTab.prevWizardStep(this)">Kembali</button>
                 <button type="submit" class="btn btn-primary">
                   <i class="fas fa-save"></i> ${isEdit ? 'Kemaskini' : 'Simpan'}
@@ -478,21 +500,24 @@ export class KesihatanTab extends BaseTab {
         ubatTetap.push(ubatData);
       }
       
-      const kesihatanData = { ...this.kirProfile.relatedData?.kesihatan };
+      const kesihatanData = { ...(this.kirProfile.relatedData?.kesihatan || {}) };
       kesihatanData.ubat_tetap = ubatTetap;
       kesihatanData.updated_at = new Date().toISOString();
       
-      await this.kirProfile.KIRService.updateRelatedDocument(this.kirProfile.kirId, 'kesihatan', kesihatanData);
+      await this.kirProfile.kirService.updateRelatedDocument(this.kirProfile.kirId, 'kesihatan', kesihatanData);
       
       // Update local data
-      if (!this.kirProfile.relatedData.kesihatan) this.kirProfile.relatedData.kesihatan = {};
-      this.kirProfile.relatedData.kesihatan.ubat_tetap = ubatTetap;
-      this.kirProfile.relatedData.kesihatan.updated_at = kesihatanData.updated_at;
+      if (!this.kirProfile.relatedData) this.kirProfile.relatedData = {};
+      this.kirProfile.relatedData.kesihatan = {
+        ...(this.kirProfile.relatedData.kesihatan || {}),
+        ...kesihatanData
+      };
       
+      const overlay = event.target.closest('.modal-overlay');
+      if (overlay) overlay.remove();
+
       this.kirProfile.showToast(`Ubat berjaya ${index !== null ? 'dikemaskini' : 'ditambah'}`, 'success');
       this.refreshKesihatanSection();
-      
-      document.querySelector('.modal-overlay').remove();
       
     } catch (error) {
       console.error('Error saving ubat tetap:', error);
@@ -523,7 +548,7 @@ export class KesihatanTab extends BaseTab {
       const kesihatanData = { ...this.kirProfile.relatedData?.kesihatan };
       kesihatanData.rawatan = rawatan;
       kesihatanData.updated_at = new Date().toISOString();
-      await this.kirProfile.KIRService.updateRelatedDocument(this.kirProfile.kirId, 'kesihatan', kesihatanData);
+      await this.kirProfile.kirService.updateRelatedDocument(this.kirProfile.kirId, 'kesihatan', kesihatanData);
       if (!this.kirProfile.relatedData.kesihatan) this.kirProfile.relatedData.kesihatan = {};
       this.kirProfile.relatedData.kesihatan.rawatan = rawatan;
       this.kirProfile.relatedData.kesihatan.updated_at = kesihatanData.updated_at;
@@ -541,36 +566,58 @@ export class KesihatanTab extends BaseTab {
       <div class="modal-overlay" onclick="this.remove()">
         <div class="modal-content" onclick="event.stopPropagation()">
           <div class="modal-header">
-            <h4>${isEdit ? 'Edit' : 'Tambah'} Rawatan / Follow-up</h4>
+            <div class="modal-header-info">
+              <span class="modal-eyebrow">Rawatan Berkala</span>
+              <h4>${isEdit ? 'Kemaskini' : 'Tambah'} Rawatan / Follow-up</h4>
+              <p class="modal-subtitle">Jejak temujanji dan rawatan susulan untuk pemantauan kesihatan yang lebih menyeluruh.</p>
+            </div>
             <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">
               <i class="fas fa-times"></i>
             </button>
           </div>
           <div class="wizard-steps">
-            <div class="step-indicator active">Langkah 1</div>
-            <div class="step-indicator">Langkah 2</div>
+            <div class="step-indicator active">
+              <span class="step-index">1</span>
+              <div class="step-label">
+                <span class="step-title">Maklumat Rawatan</span>
+                <span class="step-subtitle">Fasiliti & tarikh temujanji</span>
+              </div>
+            </div>
+            <div class="step-indicator">
+              <span class="step-index">2</span>
+              <div class="step-label">
+                <span class="step-title">Catatan Lanjutan</span>
+                <span class="step-subtitle">Perincian tambahan rawatan</span>
+              </div>
+            </div>
           </div>
           <form class="modal-form" onsubmit="kesihatanTab.saveRawatanKIR(event, ${index})">
-            <div class="wizard-step active">
-              <div class="form-group">
-                <label for="fasiliti">Fasiliti *</label>
-                <input type="text" id="fasiliti" name="fasiliti" value="${FormHelpers.escapeHtml(rawatan?.fasiliti || '')}" required placeholder="Contoh: Hospital Kuala Lumpur">
+            <div class="wizard-step active" data-step="1">
+              <div class="wizard-step-body">
+                <p class="wizard-intro">Berikan maklumat asas rawatan untuk memudahkan susulan dan rujukan seterusnya.</p>
+                <div class="form-group">
+                  <label for="fasiliti">Fasiliti *</label>
+                  <input type="text" id="fasiliti" name="fasiliti" value="${FormHelpers.escapeHtml(rawatan?.fasiliti || '')}" required placeholder="Contoh: Hospital Kuala Lumpur">
+                </div>
+                <div class="form-group">
+                  <label for="tarikh">Tarikh *</label>
+                  <input type="date" id="tarikh" name="tarikh" value="${FormHelpers.escapeHtml(rawatan?.tarikh || '')}" required>
+                </div>
               </div>
-              <div class="form-group">
-                <label for="tarikh">Tarikh *</label>
-                <input type="date" id="tarikh" name="tarikh" value="${FormHelpers.escapeHtml(rawatan?.tarikh || '')}" required>
-              </div>
-              <div class="wizard-actions">
+              <div class="wizard-footer">
                 <button type="button" class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Batal</button>
                 <button type="button" class="btn btn-primary" onclick="kesihatanTab.nextWizardStep(this)">Seterusnya</button>
               </div>
             </div>
-            <div class="wizard-step">
-              <div class="form-group">
-                <label for="catatan">Catatan</label>
-                <textarea id="catatan" name="catatan" rows="3" placeholder="Catatan rawatan...">${FormHelpers.escapeHtml(rawatan?.catatan || '')}</textarea>
+            <div class="wizard-step" data-step="2">
+              <div class="wizard-step-body">
+                <p class="wizard-intro">Catatkan ringkasan temuan penting atau tindakan susulan yang diperlukan.</p>
+                <div class="form-group">
+                  <label for="catatan">Catatan</label>
+                  <textarea id="catatan" name="catatan" rows="4" placeholder="Catatan rawatan...">${FormHelpers.escapeHtml(rawatan?.catatan || '')}</textarea>
+                </div>
               </div>
-              <div class="modal-actions">
+              <div class="wizard-footer wizard-footer--end">
                 <button type="button" class="btn btn-secondary" onclick="kesihatanTab.prevWizardStep(this)">Kembali</button>
                 <button type="submit" class="btn btn-primary">
                   <i class="fas fa-save"></i> ${isEdit ? 'Kemaskini' : 'Simpan'}
@@ -598,16 +645,19 @@ export class KesihatanTab extends BaseTab {
       } else {
         rawatan.push(rawatanData);
       }
-      const kesihatanData = { ...this.kirProfile.relatedData?.kesihatan };
+      const kesihatanData = { ...(this.kirProfile.relatedData?.kesihatan || {}) };
       kesihatanData.rawatan = rawatan;
       kesihatanData.updated_at = new Date().toISOString();
-      await this.kirProfile.KIRService.updateRelatedDocument(this.kirProfile.kirId, 'kesihatan', kesihatanData);
-      if (!this.kirProfile.relatedData.kesihatan) this.kirProfile.relatedData.kesihatan = {};
-      this.kirProfile.relatedData.kesihatan.rawatan = rawatan;
-      this.kirProfile.relatedData.kesihatan.updated_at = kesihatanData.updated_at;
+      await this.kirProfile.kirService.updateRelatedDocument(this.kirProfile.kirId, 'kesihatan', kesihatanData);
+      if (!this.kirProfile.relatedData) this.kirProfile.relatedData = {};
+      this.kirProfile.relatedData.kesihatan = {
+        ...(this.kirProfile.relatedData.kesihatan || {}),
+        ...kesihatanData
+      };
+      const overlay = event.target.closest('.modal-overlay');
+      if (overlay) overlay.remove();
       this.kirProfile.showToast(`Rawatan berjaya ${index !== null ? 'dikemaskini' : 'ditambah'}`, 'success');
       this.refreshKesihatanSection();
-      document.querySelector('.modal-overlay')?.remove();
     } catch (error) {
       console.error('Error saving rawatan:', error);
       this.kirProfile.showToast('Ralat menyimpan rawatan: ' + error.message, 'error');
@@ -637,7 +687,7 @@ export class KesihatanTab extends BaseTab {
       const kesihatanData = { ...this.kirProfile.relatedData?.kesihatan };
       kesihatanData.pembedahan = pembedahan;
       kesihatanData.updated_at = new Date().toISOString();
-      await this.kirProfile.KIRService.updateRelatedDocument(this.kirProfile.kirId, 'kesihatan', kesihatanData);
+      await this.kirProfile.kirService.updateRelatedDocument(this.kirProfile.kirId, 'kesihatan', kesihatanData);
       if (!this.kirProfile.relatedData.kesihatan) this.kirProfile.relatedData.kesihatan = {};
       this.kirProfile.relatedData.kesihatan.pembedahan = pembedahan;
       this.kirProfile.relatedData.kesihatan.updated_at = kesihatanData.updated_at;
@@ -655,44 +705,66 @@ export class KesihatanTab extends BaseTab {
       <div class="modal-overlay" onclick="this.remove()">
         <div class="modal-content" onclick="event.stopPropagation()">
           <div class="modal-header">
-            <h4>${isEdit ? 'Edit' : 'Tambah'} Sejarah Pembedahan</h4>
+            <div class="modal-header-info">
+              <span class="modal-eyebrow">Sejarah Pembedahan</span>
+              <h4>${isEdit ? 'Kemaskini' : 'Tambah'} Sejarah Pembedahan</h4>
+              <p class="modal-subtitle">Rekodkan butiran pembedahan bagi memudahkan rujukan kes dan susulan pesakit.</p>
+            </div>
             <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">
               <i class="fas fa-times"></i>
             </button>
           </div>
           <div class="wizard-steps">
-            <div class="step-indicator active">Langkah 1</div>
-            <div class="step-indicator">Langkah 2</div>
+            <div class="step-indicator active">
+              <span class="step-index">1</span>
+              <div class="step-label">
+                <span class="step-title">Butiran Pembedahan</span>
+                <span class="step-subtitle">Tarikh & jenis prosedur</span>
+              </div>
+            </div>
+            <div class="step-indicator">
+              <span class="step-index">2</span>
+              <div class="step-label">
+                <span class="step-title">Hospital & Status</span>
+                <span class="step-subtitle">Kemaskini status semasa</span>
+              </div>
+            </div>
           </div>
           <form class="modal-form" onsubmit="kesihatanTab.savePembedahanKIR(event, ${index})">
-            <div class="wizard-step active">
-              <div class="form-group">
-                <label for="tarikh">Tarikh *</label>
-                <input type="date" id="tarikh" name="tarikh" value="${FormHelpers.escapeHtml(pembedahan?.tarikh || '')}" required>
+            <div class="wizard-step active" data-step="1">
+              <div class="wizard-step-body">
+                <p class="wizard-intro">Catat tarikh dan jenis pembedahan bagi memastikan sejarah lengkap tersedia.</p>
+                <div class="form-group">
+                  <label for="tarikh">Tarikh *</label>
+                  <input type="date" id="tarikh" name="tarikh" value="${FormHelpers.escapeHtml(pembedahan?.tarikh || '')}" required>
+                </div>
+                <div class="form-group">
+                  <label for="jenis_pembedahan">Jenis Pembedahan *</label>
+                  <input type="text" id="jenis_pembedahan" name="jenis_pembedahan" value="${FormHelpers.escapeHtml(pembedahan?.jenis_pembedahan || '')}" required placeholder="Contoh: Appendectomy">
+                </div>
               </div>
-              <div class="form-group">
-                <label for="jenis_pembedahan">Jenis Pembedahan *</label>
-                <input type="text" id="jenis_pembedahan" name="jenis_pembedahan" value="${FormHelpers.escapeHtml(pembedahan?.jenis_pembedahan || '')}" required placeholder="Contoh: Appendectomy">
-              </div>
-              <div class="wizard-actions">
+              <div class="wizard-footer">
                 <button type="button" class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Batal</button>
                 <button type="button" class="btn btn-primary" onclick="kesihatanTab.nextWizardStep(this)">Seterusnya</button>
               </div>
             </div>
-            <div class="wizard-step">
-              <div class="form-group">
-                <label for="hospital">Hospital *</label>
-                <input type="text" id="hospital" name="hospital" value="${FormHelpers.escapeHtml(pembedahan?.hospital || '')}" required placeholder="Contoh: Hospital Kuala Lumpur">
+            <div class="wizard-step" data-step="2">
+              <div class="wizard-step-body">
+                <p class="wizard-intro">Nyatakan hospital terlibat dan status semasa bagi tindakan susulan yang tepat.</p>
+                <div class="form-group">
+                  <label for="hospital">Hospital *</label>
+                  <input type="text" id="hospital" name="hospital" value="${FormHelpers.escapeHtml(pembedahan?.hospital || '')}" required placeholder="Contoh: Hospital Kuala Lumpur">
+                </div>
+                <div class="form-group">
+                  <label for="status">Status *</label>
+                  <select id="status" name="status" required>
+                    <option value="">Pilih Status</option>
+                    <option value="Selesai" ${pembedahan?.status === 'Selesai' ? 'selected' : ''}>Selesai</option>
+                    <option value="Perlu Follow-up" ${pembedahan?.status === 'Perlu Follow-up' ? 'selected' : ''}>Perlu Follow-up</option>
+                  </select>
+                </div>
               </div>
-              <div class="form-group">
-                <label for="status">Status *</label>
-                <select id="status" name="status" required>
-                  <option value="">Pilih Status</option>
-                  <option value="Selesai" ${pembedahan?.status === 'Selesai' ? 'selected' : ''}>Selesai</option>
-                  <option value="Perlu Follow-up" ${pembedahan?.status === 'Perlu Follow-up' ? 'selected' : ''}>Perlu Follow-up</option>
-                </select>
-              </div>
-              <div class="modal-actions">
+              <div class="wizard-footer wizard-footer--end">
                 <button type="button" class="btn btn-secondary" onclick="kesihatanTab.prevWizardStep(this)">Kembali</button>
                 <button type="submit" class="btn btn-primary">
                   <i class="fas fa-save"></i> ${isEdit ? 'Kemaskini' : 'Simpan'}
@@ -721,16 +793,19 @@ export class KesihatanTab extends BaseTab {
       } else {
         pembedahan.push(pembedahanData);
       }
-      const kesihatanData = { ...this.kirProfile.relatedData?.kesihatan };
+      const kesihatanData = { ...(this.kirProfile.relatedData?.kesihatan || {}) };
       kesihatanData.pembedahan = pembedahan;
       kesihatanData.updated_at = new Date().toISOString();
-      await this.kirProfile.KIRService.updateRelatedDocument(this.kirProfile.kirId, 'kesihatan', kesihatanData);
-      if (!this.kirProfile.relatedData.kesihatan) this.kirProfile.relatedData.kesihatan = {};
-      this.kirProfile.relatedData.kesihatan.pembedahan = pembedahan;
-      this.kirProfile.relatedData.kesihatan.updated_at = kesihatanData.updated_at;
+      await this.kirProfile.kirService.updateRelatedDocument(this.kirProfile.kirId, 'kesihatan', kesihatanData);
+      if (!this.kirProfile.relatedData) this.kirProfile.relatedData = {};
+      this.kirProfile.relatedData.kesihatan = {
+        ...(this.kirProfile.relatedData.kesihatan || {}),
+        ...kesihatanData
+      };
+      const overlay = event.target.closest('.modal-overlay');
+      if (overlay) overlay.remove();
       this.kirProfile.showToast(`Pembedahan berjaya ${index !== null ? 'dikemaskini' : 'ditambah'}`, 'success');
       this.refreshKesihatanSection();
-      document.querySelector('.modal-overlay')?.remove();
     } catch (error) {
       console.error('Error saving pembedahan:', error);
       this.kirProfile.showToast('Ralat menyimpan pembedahan: ' + error.message, 'error');
@@ -741,6 +816,8 @@ export class KesihatanTab extends BaseTab {
     const sectionContent = document.querySelector('.kesihatan-section-content');
     if (sectionContent) {
       sectionContent.innerHTML = this.createKesihatanSectionContent();
+      // Re-bind events for newly rendered content
+      this.setupEventListeners();
     }
     this.updateKesihatanHeader();
   }
@@ -776,30 +853,75 @@ export class KesihatanTab extends BaseTab {
   nextWizardStep(buttonEl) {
     const modal = buttonEl.closest('.modal-content');
     if (!modal) return;
-    const steps = modal.querySelectorAll('.wizard-step');
-    const indicators = modal.querySelectorAll('.step-indicator');
-    let activeIndex = 0;
-    steps.forEach((step, i) => { if (step.classList.contains('active')) activeIndex = i; });
+    const steps = Array.from(modal.querySelectorAll('.wizard-step'));
+    const indicators = Array.from(modal.querySelectorAll('.step-indicator'));
+    const activeIndex = steps.findIndex(step => step.classList.contains('active'));
+    if (activeIndex === -1) return;
+
+    const currentStep = steps[activeIndex];
+    const requiredFields = Array.from(currentStep.querySelectorAll('[required]'));
+    let firstInvalid = null;
+
+    requiredFields.forEach(field => {
+      const value = typeof field.value === 'string' ? field.value.trim() : field.value;
+      const isCheckbox = field.type === 'checkbox' || field.type === 'radio';
+      const isEmpty = isCheckbox
+        ? !currentStep.querySelectorAll(`[name="${field.name}"]:checked`).length
+        : !value;
+      if (isEmpty) {
+        if (!firstInvalid) firstInvalid = field;
+        field.classList.add('input-error');
+      } else {
+        field.classList.remove('input-error');
+      }
+    });
+
+    if (firstInvalid) {
+      firstInvalid.focus();
+      if (typeof firstInvalid.reportValidity === 'function') {
+        firstInvalid.reportValidity();
+      }
+      return;
+    }
+
     if (activeIndex < steps.length - 1) {
       steps[activeIndex].classList.remove('active');
       steps[activeIndex + 1].classList.add('active');
-      if (indicators[activeIndex]) indicators[activeIndex].classList.remove('active');
-      if (indicators[activeIndex + 1]) indicators[activeIndex + 1].classList.add('active');
+      if (indicators[activeIndex]) {
+        indicators[activeIndex].classList.add('completed');
+        indicators[activeIndex].classList.remove('active');
+      }
+      if (indicators[activeIndex + 1]) {
+        indicators[activeIndex + 1].classList.add('active');
+      }
+      const firstField = steps[activeIndex + 1].querySelector('input, select, textarea');
+      if (firstField) firstField.focus();
     }
   }
 
   prevWizardStep(buttonEl) {
     const modal = buttonEl.closest('.modal-content');
     if (!modal) return;
-    const steps = modal.querySelectorAll('.wizard-step');
-    const indicators = modal.querySelectorAll('.step-indicator');
-    let activeIndex = 0;
-    steps.forEach((step, i) => { if (step.classList.contains('active')) activeIndex = i; });
+    const steps = Array.from(modal.querySelectorAll('.wizard-step'));
+    const indicators = Array.from(modal.querySelectorAll('.step-indicator'));
+    const activeIndex = steps.findIndex(step => step.classList.contains('active'));
+    if (activeIndex === -1) return;
+
     if (activeIndex > 0) {
       steps[activeIndex].classList.remove('active');
-      steps[activeIndex - 1].classList.add('active');
-      if (indicators[activeIndex]) indicators[activeIndex].classList.remove('active');
-      if (indicators[activeIndex - 1]) indicators[activeIndex - 1].classList.add('active');
+      if (indicators[activeIndex]) {
+        indicators[activeIndex].classList.remove('active');
+      }
+
+      const previousIndex = activeIndex - 1;
+      steps[previousIndex].classList.add('active');
+      if (indicators[previousIndex]) {
+        indicators[previousIndex].classList.add('active');
+        indicators[previousIndex].classList.remove('completed');
+      }
+      steps[previousIndex].querySelectorAll('.input-error').forEach(el => el.classList.remove('input-error'));
+      const firstField = steps[previousIndex].querySelector('input, select, textarea');
+      if (firstField) firstField.focus();
     }
   }
 
@@ -809,23 +931,53 @@ export class KesihatanTab extends BaseTab {
     const style = document.createElement('style');
     style.id = 'kesihatan-modal-styles';
     style.textContent = `
-      .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background-color: rgba(0,0,0,0.5); display:flex; justify-content:center; align-items:center; z-index: 1000; }
-      .modal-content { background:#fff; border-radius:8px; box-shadow:0 10px 25px rgba(0,0,0,0.2); width: 92%; max-width: 600px; max-height: 90vh; overflow-y:auto; }
-      .modal-header { padding:16px; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center; }
-      .modal-header h4 { margin:0; font-size:18px; }
-      .modal-close { background:none; border:none; font-size:20px; color:#6b7280; cursor:pointer; }
-      .modal-form { padding:16px; }
-      .form-group { margin-bottom:12px; }
-      .form-row { display:flex; gap:12px; }
-      .form-row .form-group { flex:1; }
-      .modal-actions { display:flex; justify-content:flex-end; gap:12px; padding:16px; border-top:1px solid #e5e7eb; }
-      .wizard-steps { display:flex; gap:8px; padding:0 16px; margin:8px 0; }
-      .step-indicator { flex:1; text-align:center; padding:8px; border-radius:6px; border:1px solid #e5e7eb; background:#f9fafb; color:#374151; font-weight:500; }
-      .step-indicator.active { background:#2563eb; color:#fff; border-color:#2563eb; }
-      .wizard-step { display:none; }
+      .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background-color: rgba(15,23,42,0.45); display:flex; justify-content:center; align-items:center; z-index: 1000; padding:16px; box-sizing:border-box; }
+      .modal-content { background:#ffffff; border-radius:18px; box-shadow:0 30px 60px rgba(15,23,42,0.18); width:min(680px,100%); max-height:92vh; display:flex; flex-direction:column; overflow:hidden; }
+      .modal-header { padding:24px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:flex-start; gap:16px; background:linear-gradient(120deg, rgba(59,130,246,0.08), rgba(14,165,233,0.08)); }
+      .modal-header-info { display:flex; flex-direction:column; gap:6px; }
+      .modal-eyebrow { font-size:0.75rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#2563eb; margin:0; }
+      .modal-header h4 { margin:0; font-size:1.3rem; color:#0f172a; }
+      .modal-subtitle { margin:0; font-size:0.9rem; color:#475569; max-width:420px; line-height:1.4; }
+      .modal-close { background:none; border:none; font-size:20px; color:#475569; cursor:pointer; padding:4px; line-height:1; transition:color 0.2s ease; }
+      .modal-close:hover { color:#1d4ed8; }
+      .wizard-steps { display:flex; align-items:center; gap:12px; padding:18px 24px; background:#f8fafc; border-bottom:1px solid #e2e8f0; }
+      .step-indicator { flex:1; display:flex; align-items:center; gap:12px; padding:12px 16px; border-radius:12px; border:1px solid #e2e8f0; background:#ffffff; transition:all 0.25s ease; }
+      .step-index { width:32px; height:32px; border-radius:50%; background:#e0e7ff; color:#1d4ed8; display:flex; align-items:center; justify-content:center; font-weight:600; }
+      .step-label { display:flex; flex-direction:column; gap:3px; }
+      .step-title { font-size:0.95rem; font-weight:600; color:#0f172a; }
+      .step-subtitle { font-size:0.78rem; color:#64748b; }
+      .step-indicator.active { border-color:#2563eb; background:#eff6ff; box-shadow:0 12px 24px rgba(37,99,235,0.14); }
+      .step-indicator.active .step-index { background:#2563eb; color:#fff; }
+      .step-indicator.completed { border-color:#10b981; background:#ecfdf5; }
+      .step-indicator.completed .step-index { background:#10b981; color:#fff; }
+      .modal-form { padding:24px; overflow-y:auto; }
+      .wizard-step { display:none; animation:wizardFade 0.25s ease; }
       .wizard-step.active { display:block; }
-      .wizard-actions { display:flex; justify-content:space-between; gap:12px; padding:16px 0; }
+      .wizard-step-body { display:flex; flex-direction:column; gap:18px; }
+      .wizard-intro { margin:0; font-size:0.9rem; color:#475569; background:#f1f5f9; border-radius:10px; padding:12px 14px; }
+      .modal-content .form-group { display:flex; flex-direction:column; gap:6px; }
+      .modal-content .form-group label { font-size:0.9rem; font-weight:600; color:#1e293b; }
+      .modal-content .form-group input,
+      .modal-content .form-group select,
+      .modal-content .form-group textarea { border:1px solid #d0d7e9; border-radius:10px; padding:10px 12px; font-size:0.95rem; transition:border-color 0.2s ease, box-shadow 0.2s ease; background:#fff; }
+      .modal-content .form-group input:focus,
+      .modal-content .form-group select:focus,
+      .modal-content .form-group textarea:focus { outline:none; border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,0.15); }
+      .modal-content .form-row { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; }
+      .modal-content textarea { resize:vertical; min-height:120px; }
+      .wizard-footer { margin-top:24px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+      .wizard-footer--end { justify-content:flex-end; }
+      .wizard-footer .btn { min-width:120px; }
+      .modal-content .input-error { border-color:#dc2626 !important; box-shadow:0 0 0 3px rgba(220,38,38,0.12); }
       .page-actions { margin-top:24px; display:flex; justify-content:flex-end; }
+      @keyframes wizardFade { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+      @media (max-width: 640px) {
+        .modal-content { border-radius:14px; }
+        .modal-header { padding:20px; }
+        .wizard-steps { flex-direction:column; align-items:stretch; }
+        .wizard-footer { flex-direction:column-reverse; align-items:stretch; }
+        .wizard-footer .btn { width:100%; }
+      }
     `;
     document.head.appendChild(style);
   }
@@ -869,7 +1021,7 @@ export class KesihatanTab extends BaseTab {
     kesihatanData[sectionId] = sectionData;
     kesihatanData.updated_at = new Date().toISOString();
     
-    await this.kirProfile.KIRService.updateRelatedDocument(this.kirProfile.kirId, 'kesihatan', kesihatanData);
+    await this.kirProfile.kirService.updateRelatedDocument(this.kirProfile.kirId, 'kesihatan', kesihatanData);
     
     // Update local data
     if (!this.kirProfile.relatedData) this.kirProfile.relatedData = {};
