@@ -19,22 +19,14 @@ export class BantuanBulananTab extends BaseTab {
               <label for="bantuan_jkm">Bantuan JKM (RM)</label>
               <input type="number" id="bantuan_jkm" name="bantuan_jkm" value="${data.bantuan_jkm || ''}" step="0.01" min="0" placeholder="0.00">
             </div>
+            <div class="form-group">
+              <label for="catatan_bantuan_jkm">Catatan Bantuan JKM</label>
+              <textarea id="catatan_bantuan_jkm" name="catatan_bantuan_jkm" rows="3" placeholder="Catatan tambahan bagi bantuan JKM">${data.catatan_bantuan_jkm || ''}</textarea>
+            </div>
             
             <div class="form-group">
               <label for="bantuan_zakat">Bantuan Zakat (RM)</label>
               <input type="number" id="bantuan_zakat" name="bantuan_zakat" value="${data.bantuan_zakat || ''}" step="0.01" min="0" placeholder="0.00">
-            </div>
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group">
-              <label for="bantuan_oku">Bantuan OKU (RM)</label>
-              <input type="number" id="bantuan_oku" name="bantuan_oku" value="${data.bantuan_oku || ''}" step="0.01" min="0" placeholder="0.00">
-            </div>
-            
-            <div class="form-group">
-              <label for="bantuan_warga_emas">Bantuan Warga Emas (RM)</label>
-              <input type="number" id="bantuan_warga_emas" name="bantuan_warga_emas" value="${data.bantuan_warga_emas || ''}" step="0.01" min="0" placeholder="0.00">
             </div>
           </div>
           
@@ -45,31 +37,25 @@ export class BantuanBulananTab extends BaseTab {
             </div>
             
             <div class="form-group">
-              <label for="bantuan_ngo">Bantuan NGO (RM)</label>
-              <input type="number" id="bantuan_ngo" name="bantuan_ngo" value="${data.bantuan_ngo || ''}" step="0.01" min="0" placeholder="0.00">
-            </div>
-          </div>
-          
-          <div class="form-row">
-            <div class="form-group">
               <label for="bantuan_kerajaan_negeri">Bantuan Kerajaan Negeri (RM)</label>
               <input type="number" id="bantuan_kerajaan_negeri" name="bantuan_kerajaan_negeri" value="${data.bantuan_kerajaan_negeri || ''}" step="0.01" min="0" placeholder="0.00">
             </div>
-            
+          </div>
+
+          <div class="form-row">
             <div class="form-group">
-              <label for="bantuan_lain">Bantuan Lain (RM)</label>
-              <input type="number" id="bantuan_lain" name="bantuan_lain" value="${data.bantuan_lain || ''}" step="0.01" min="0" placeholder="0.00">
+              <label for="bantuan_lain_lain">Bantuan Lain-lain (RM)</label>
+              <input type="number" id="bantuan_lain_lain" name="bantuan_lain_lain" value="${data.bantuan_lain_lain || ''}" step="0.01" min="0" placeholder="0.00">
+            </div>
+            <div class="form-group">
+              <label for="catatan_bantuan_lain_lain">Catatan Bantuan Lain-lain</label>
+              <textarea id="catatan_bantuan_lain_lain" name="catatan_bantuan_lain_lain" rows="3" placeholder="Catatan bagi bantuan lain-lain">${data.catatan_bantuan_lain_lain || ''}</textarea>
             </div>
           </div>
           
           <div class="form-group">
             <label for="jumlah_keseluruhan_bantuan">Jumlah Keseluruhan Bantuan Bulanan (RM)</label>
             <input type="number" id="jumlah_keseluruhan_bantuan" name="jumlah_keseluruhan_bantuan" value="${data.jumlah_keseluruhan_bantuan || ''}" step="0.01" min="0" readonly>
-          </div>
-          
-          <div class="form-group">
-            <label for="catatan_bantuan">Catatan Tambahan (Opsional)</label>
-            <textarea id="catatan_bantuan" name="catatan_bantuan" rows="3" placeholder="Sebarang maklumat tambahan mengenai bantuan yang diterima">${data.catatan_bantuan || ''}</textarea>
           </div>
         </div>
         
@@ -93,16 +79,12 @@ export class BantuanBulananTab extends BaseTab {
       // Calculate total assistance automatically
       const bantuan_jkm = parseFloat(formData.bantuan_jkm) || 0;
       const bantuan_zakat = parseFloat(formData.bantuan_zakat) || 0;
-      const bantuan_oku = parseFloat(formData.bantuan_oku) || 0;
-      const bantuan_warga_emas = parseFloat(formData.bantuan_warga_emas) || 0;
       const bantuan_baitulmal = parseFloat(formData.bantuan_baitulmal) || 0;
-      const bantuan_ngo = parseFloat(formData.bantuan_ngo) || 0;
       const bantuan_kerajaan_negeri = parseFloat(formData.bantuan_kerajaan_negeri) || 0;
-      const bantuan_lain = parseFloat(formData.bantuan_lain) || 0;
+      const bantuan_lain_lain = parseFloat(formData.bantuan_lain_lain) || 0;
       
-      formData.jumlah_keseluruhan_bantuan = bantuan_jkm + bantuan_zakat + bantuan_oku + 
-                                           bantuan_warga_emas + bantuan_baitulmal + bantuan_ngo + 
-                                           bantuan_kerajaan_negeri + bantuan_lain;
+      formData.jumlah_keseluruhan_bantuan = bantuan_jkm + bantuan_zakat + bantuan_baitulmal + 
+                                           bantuan_kerajaan_negeri + bantuan_lain_lain;
 
       // Save via KIRService
       await this.kirProfile.kirService.updateRelatedDocument(this.kirProfile.kirId, 'bantuan_bulanan', formData);
@@ -132,8 +114,8 @@ export class BantuanBulananTab extends BaseTab {
 
     // Basic validation - at least one assistance should be provided
     const assistanceFields = [
-      'bantuan_jkm', 'bantuan_zakat', 'bantuan_oku', 'bantuan_warga_emas',
-      'bantuan_baitulmal', 'bantuan_ngo', 'bantuan_kerajaan_negeri', 'bantuan_lain'
+      'bantuan_jkm', 'bantuan_zakat',
+      'bantuan_baitulmal', 'bantuan_kerajaan_negeri', 'bantuan_lain_lain'
     ];
     
     const hasAnyAssistance = assistanceFields.some(fieldName => {
@@ -152,8 +134,8 @@ export class BantuanBulananTab extends BaseTab {
   setupEventListeners() {
     // Auto-calculate total when individual amounts change
     const assistanceFields = [
-      'bantuan_jkm', 'bantuan_zakat', 'bantuan_oku', 'bantuan_warga_emas',
-      'bantuan_baitulmal', 'bantuan_ngo', 'bantuan_kerajaan_negeri', 'bantuan_lain'
+      'bantuan_jkm', 'bantuan_zakat',
+      'bantuan_baitulmal', 'bantuan_kerajaan_negeri', 'bantuan_lain_lain'
     ];
     
     assistanceFields.forEach(fieldName => {
@@ -176,8 +158,8 @@ export class BantuanBulananTab extends BaseTab {
 
   calculateAndUpdateTotal() {
     const assistanceFields = [
-      'bantuan_jkm', 'bantuan_zakat', 'bantuan_oku', 'bantuan_warga_emas',
-      'bantuan_baitulmal', 'bantuan_ngo', 'bantuan_kerajaan_negeri', 'bantuan_lain'
+      'bantuan_jkm', 'bantuan_zakat',
+      'bantuan_baitulmal', 'bantuan_kerajaan_negeri', 'bantuan_lain_lain'
     ];
     
     const total = assistanceFields.reduce((sum, fieldName) => {
