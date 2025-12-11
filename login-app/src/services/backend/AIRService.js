@@ -3,7 +3,7 @@ import { db } from '../database/firebase.js';
 import { 
   collection, 
   doc, 
-  addDoc, 
+  setDoc, 
   updateDoc, 
   deleteDoc, 
   getDocs, 
@@ -14,6 +14,7 @@ import {
   Timestamp 
 } from 'firebase/firestore';
 import { COLLECTIONS, addStandardFields, createEnvFilter } from '../database/collections.js';
+import ICIndexService, { INDEX_OWNER_TYPES } from './ICIndexService.js';
 
 export class AIRService {
   static COLLECTION_NAME = COLLECTIONS.KIR_AIR;
@@ -95,8 +96,30 @@ export class AIRService {
         tarikh_kemas_kini: now
       });
 
-      const docRef = await addDoc(collection(db, this.COLLECTION_NAME), airData);
-      return docRef.id;
+      const airRef = doc(collection(db, this.COLLECTION_NAME));
+      const airId = airRef.id;
+      const noKpValue = payload.no_kp;
+      let indexReserved = false;
+
+      if (noKpValue) {
+        await ICIndexService.register(noKpValue, {
+          ownerType: INDEX_OWNER_TYPES.AIR,
+          owner_id: airId,
+          kirId,
+          nama: payload.nama || ''
+        });
+        indexReserved = true;
+      }
+
+      try {
+        await setDoc(airRef, airData);
+        return airId;
+      } catch (error) {
+        if (indexReserved) {
+          await ICIndexService.unregister(noKpValue);
+        }
+        throw error;
+      }
     } catch (error) {
       console.error('Error creating AIR:', error);
       throw error;
@@ -122,6 +145,29 @@ export class AIRService {
       if (!airDoc.exists()) {
         throw new Error('AIR record not found');
       }
+      const currentData = airDoc.data();
+      const currentNoKP = currentData.no_kp;
+      const nextNoKP = payload.no_kp;
+      const metadata = {
+        ownerType: INDEX_OWNER_TYPES.AIR,
+        owner_id: airId,
+        kirId: currentData.kir_id,
+        nama: payload.nama || currentData.nama || ''
+      };
+      let icTransferred = false;
+      let icCleared = false;
+
+      if (nextNoKP !== undefined) {
+        if (nextNoKP) {
+          await ICIndexService.transfer(currentNoKP, nextNoKP, metadata);
+          icTransferred = true;
+        } else if (currentNoKP) {
+          await ICIndexService.unregister(currentNoKP);
+          icCleared = true;
+        }
+      } else if (currentNoKP && (payload.nama || payload.status || payload.hubungan)) {
+        await ICIndexService.updateMetadata(currentNoKP, metadata);
+      }
 
       // Prepare update data
       const updateData = {
@@ -142,7 +188,16 @@ export class AIRService {
         }
       });
 
-      await updateDoc(airRef, updateData);
+      try {
+        await updateDoc(airRef, updateData);
+      } catch (error) {
+        if (icTransferred) {
+          await ICIndexService.transfer(nextNoKP, currentNoKP, metadata);
+        } else if (icCleared && currentNoKP) {
+          await ICIndexService.register(currentNoKP, metadata);
+        }
+        throw error;
+      }
     } catch (error) {
       console.error('Error updating AIR:', error);
       throw error;
@@ -167,8 +222,13 @@ export class AIRService {
       if (!airDoc.exists()) {
         throw new Error('AIR record not found');
       }
+      const currentData = airDoc.data();
+      const currentNoKP = currentData.no_kp;
 
       await deleteDoc(airRef);
+      if (currentNoKP) {
+        await ICIndexService.unregister(currentNoKP);
+      }
     } catch (error) {
       console.error('Error deleting AIR:', error);
       throw error;

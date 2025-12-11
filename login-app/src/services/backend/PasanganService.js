@@ -3,7 +3,7 @@ import { db } from '../database/firebase.js';
 import { 
   collection, 
   doc, 
-  addDoc, 
+  setDoc, 
   updateDoc, 
   deleteDoc, 
   getDocs, 
@@ -14,6 +14,7 @@ import {
   Timestamp 
 } from 'firebase/firestore';
 import { COLLECTIONS, addStandardFields, createEnvFilter } from '../database/collections.js';
+import ICIndexService, { INDEX_OWNER_TYPES } from './ICIndexService.js';
 
 export class PasanganService {
 
@@ -130,8 +131,31 @@ export class PasanganService {
         tarikh_kemas_kini: now
       };
 
-      const docRef = await addDoc(collection(db, COLLECTIONS.KIR_PASANGAN), addStandardFields(pkirData));
-      return { id: docRef.id };
+      const pasanganRef = doc(collection(db, COLLECTIONS.KIR_PASANGAN));
+      const pasanganId = pasanganRef.id;
+      const icValue = this.extractNoKP(payload);
+      const nama = this.extractNama(payload);
+      let indexReserved = false;
+
+      if (icValue) {
+        await ICIndexService.register(icValue, {
+          ownerType: INDEX_OWNER_TYPES.PKIR,
+          owner_id: pasanganId,
+          kirId,
+          nama
+        });
+        indexReserved = true;
+      }
+
+      try {
+        await setDoc(pasanganRef, addStandardFields(pkirData));
+        return { id: pasanganId };
+      } catch (error) {
+        if (indexReserved) {
+          await ICIndexService.unregister(icValue);
+        }
+        throw error;
+      }
     } catch (error) {
       console.error('Error creating PKIR:', error);
       throw new Error(`Failed to create PKIR: ${error.message}`);
@@ -144,10 +168,44 @@ export class PasanganService {
    * @param {object} partial - Partial PKIR data to update
    * @returns {Promise<void>}
    */
-  static async updatePKIR(pkirId, partial) {
+  static async updatePKIR(pkirId, partial = {}) {
     try {
       if (!pkirId) {
         throw new Error('PKIR ID is required');
+      }
+
+      const docRef = doc(db, COLLECTIONS.KIR_PASANGAN, pkirId);
+      const existingDoc = await getDoc(docRef);
+      if (!existingDoc.exists()) {
+        throw new Error('PKIR record not found');
+      }
+
+      const currentData = existingDoc.data();
+      const currentNoKP = this.extractNoKP(currentData);
+      const nextNoKP = this.extractNoKP(partial);
+      const metadata = {
+        ownerType: INDEX_OWNER_TYPES.PKIR,
+        owner_id: pkirId,
+        kirId: currentData.kir_id,
+        nama: this.extractNama(partial) || this.extractNama(currentData)
+      };
+      let icTransferred = false;
+      let icCleared = false;
+
+      const icFieldProvided = partial.asas?.no_kp !== undefined ||
+        partial.no_kp_pasangan !== undefined ||
+        partial.no_kp !== undefined;
+
+      if (icFieldProvided) {
+        if (nextNoKP) {
+          await ICIndexService.transfer(currentNoKP, nextNoKP, metadata);
+          icTransferred = true;
+        } else if (currentNoKP) {
+          await ICIndexService.unregister(currentNoKP);
+          icCleared = true;
+        }
+      } else if (currentNoKP && (partial.asas?.nama || partial.nama_pasangan)) {
+        await ICIndexService.updateMetadata(currentNoKP, metadata);
       }
 
       const updateData = {
@@ -155,7 +213,6 @@ export class PasanganService {
         tarikh_kemas_kini: Timestamp.now()
       };
 
-      // Handle date conversion for asas.tarikh_lahir if present
       if (partial.asas?.tarikh_lahir) {
         updateData.asas = {
           ...partial.asas,
@@ -163,8 +220,16 @@ export class PasanganService {
         };
       }
 
-      const docRef = doc(db, COLLECTIONS.KIR_PASANGAN, pkirId);
-      await updateDoc(docRef, updateData);
+      try {
+        await updateDoc(docRef, updateData);
+      } catch (error) {
+        if (icTransferred) {
+          await ICIndexService.transfer(nextNoKP, currentNoKP, metadata);
+        } else if (icCleared && currentNoKP) {
+          await ICIndexService.register(currentNoKP, metadata);
+        }
+        throw error;
+      }
     } catch (error) {
       console.error('Error updating PKIR:', error);
       throw new Error(`Failed to update PKIR: ${error.message}`);
@@ -183,11 +248,29 @@ export class PasanganService {
       }
 
       const docRef = doc(db, COLLECTIONS.KIR_PASANGAN, pkirId);
+      const existingDoc = await getDoc(docRef);
+      if (!existingDoc.exists()) {
+        throw new Error('PKIR record not found');
+      }
+
+      const currentNoKP = this.extractNoKP(existingDoc.data());
+
       await deleteDoc(docRef);
+      if (currentNoKP) {
+        await ICIndexService.unregister(currentNoKP);
+      }
     } catch (error) {
       console.error('Error deleting PKIR:', error);
       throw new Error(`Failed to delete PKIR: ${error.message}`);
     }
+  }
+
+  static extractNoKP(record = {}) {
+    return record?.asas?.no_kp || record?.no_kp_pasangan || record?.no_kp || '';
+  }
+
+  static extractNama(record = {}) {
+    return record?.asas?.nama || record?.nama_pasangan || record?.nama || '';
   }
 
   /**

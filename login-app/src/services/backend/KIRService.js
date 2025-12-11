@@ -19,6 +19,7 @@ import { db } from '../database/firebase.js';
 import { COLLECTIONS, addStandardFields, createEnvFilter, normalizeNoKP as normalizeNoKPUtil, getEnvironment } from '../database/collections.js';
 import { validateKIR, validate } from '../../lib/validators.js';
 import { PasanganService } from './PasanganService.js';
+import ICIndexService, { INDEX_OWNER_TYPES } from './ICIndexService.js';
 import { normalizeFieldNames, mapCiptaToProfile } from '../../lib/fieldMapper.js';
 
 export class KIRService {
@@ -53,7 +54,7 @@ export class KIRService {
       const kirId = kirRef.id;
       
       // Create No. KP index first (atomic uniqueness check)
-      await this.createNoKPIndex(normalizedNoKP, kirId);
+      await this.createNoKPIndex(normalizedNoKP, kirId, cleanedData.nama_penuh || '');
       
       try {
         // Build address using helper function
@@ -145,7 +146,19 @@ export class KIRService {
       
       // Handle No. KP changes with index updates
       if (cleanedData.no_kp && this.normalizeNoKP(cleanedData.no_kp) !== this.normalizeNoKP(currentData.no_kp)) {
-        await this.updateNoKPIndex(currentData.no_kp, cleanedData.no_kp, id);
+        await this.updateNoKPIndex(
+          currentData.no_kp,
+          cleanedData.no_kp,
+          id,
+          cleanedData.nama_penuh || currentData.nama_penuh || ''
+        );
+      } else if (cleanedData.nama_penuh && currentData.no_kp) {
+        await this.updateNoKPIndex(
+          currentData.no_kp,
+          currentData.no_kp,
+          id,
+          cleanedData.nama_penuh
+        );
       }
 
       // Prepare update data (only scalar fields)
@@ -438,77 +451,37 @@ export class KIRService {
     return age;
   }
   
-  // Atomic No. KP uniqueness using index collection
-  static async createNoKPIndex(noKP, kirId) {
-    const normalizedNoKP = this.normalizeNoKP(noKP);
-    const indexRef = doc(db, COLLECTIONS.INDEX_NOKP, normalizedNoKP);
-    
-    try {
-      // Attempt to create index document atomically
-      await setDoc(indexRef, {
-        kir_id: kirId,
-        no_kp_original: noKP,
-        created_at: new Date()
-      }, { merge: false }); // merge: false ensures it fails if doc exists
-      
-      return true;
-    } catch (error) {
-      if (error.code === 'already-exists' || error.message.includes('already exists')) {
-        throw new Error(`No. KP ${noKP} telah wujud dalam sistem`);
-      }
-      throw error;
-    }
+  // Atomic No. KP uniqueness using shared index collection
+  static async createNoKPIndex(noKP, kirId, nama = '') {
+    await ICIndexService.register(noKP, {
+      ownerType: INDEX_OWNER_TYPES.KIR,
+      owner_id: kirId,
+      kirId,
+      nama
+    });
   }
   
   static async deleteNoKPIndex(noKP) {
-    const normalizedNoKP = this.normalizeNoKP(noKP);
-    const indexRef = doc(db, COLLECTIONS.INDEX_NOKP, normalizedNoKP);
-    
-    try {
-      await deleteDoc(indexRef);
-    } catch (error) {
-      console.warn('Warning: Could not delete No. KP index:', error);
-      // Don't throw - this is cleanup, main operation should succeed
-    }
+    await ICIndexService.unregister(noKP);
   }
   
   // S1 Requirement: Get No. KP index for ensureKirId()
   static async getNoKPIndex(normalizedNoKP) {
     try {
-      const indexRef = doc(db, COLLECTIONS.INDEX_NOKP, normalizedNoKP);
-      const indexDoc = await getDoc(indexRef);
-      
-      if (indexDoc.exists()) {
-        return indexDoc.data();
-      }
-      
-      return null;
+      return await ICIndexService.get(normalizedNoKP);
     } catch (error) {
       console.error('Error getting No. KP index:', error);
       throw new Error('Ralat semasa memeriksa indeks No. KP');
     }
   }
   
-  static async updateNoKPIndex(oldNoKP, newNoKP, kirId) {
-    if (this.normalizeNoKP(oldNoKP) === this.normalizeNoKP(newNoKP)) {
-      return; // No change needed
-    }
-    
-    let newIndexCreated = false;
-    try {
-      // Create new index first
-      await this.createNoKPIndex(newNoKP, kirId);
-      newIndexCreated = true;
-      
-      // Delete old index
-      await this.deleteNoKPIndex(oldNoKP);
-    } catch (error) {
-      // If new index creation failed, clean up
-      if (newIndexCreated) {
-        await this.deleteNoKPIndex(newNoKP);
-      }
-      throw error;
-    }
+  static async updateNoKPIndex(oldNoKP, newNoKP, kirId, nama = '') {
+    await ICIndexService.transfer(oldNoKP, newNoKP, {
+      ownerType: INDEX_OWNER_TYPES.KIR,
+      owner_id: kirId,
+      kir_id: kirId,
+      nama
+    });
   }
   
   
