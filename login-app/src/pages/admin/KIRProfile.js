@@ -14,6 +14,7 @@ import { BantuanBulananTab } from './KIRProfile/components/tabs/BantuanBulananTa
 import { AIRTab } from './KIRProfile/components/tabs/AIRTab.js';
 import { PKIRTab } from './KIRProfile/components/tabs/PKIRTab.js';
 import { ProgramTab } from './KIRProfile/components/tabs/ProgramTab.js';
+import { deriveBirthInfoFromIC } from './KIRProfile/components/shared/icUtils.js';
 
 export class KIRProfile {
   constructor() {
@@ -249,6 +250,7 @@ export class KIRProfile {
       
       // Assign global tab component references for backward compatibility
       this.assignGlobalTabReferences();
+      this.setupBirthInfoAutomation();
 
       // Ensure active tab component binds its event listeners on initial render
       const activeTabComponent = this.tabComponents[this.currentTab];
@@ -271,6 +273,43 @@ export class KIRProfile {
         window[globalName] = component;
       }
     });
+  }
+
+  setupBirthInfoAutomation() {
+    const maklumatAsasForm = document.querySelector('form[data-tab="maklumat-asas"]');
+    if (maklumatAsasForm) {
+      const icInput = maklumatAsasForm.querySelector('#no_kp');
+      const birthInput = maklumatAsasForm.querySelector('#tarikh_lahir');
+      const ageInput = maklumatAsasForm.querySelector('#umur');
+
+      if (icInput && birthInput && ageInput) {
+        if (!icInput.dataset.icBirthListenerAttached) {
+          icInput.addEventListener('input', () => {
+            this.updateBirthInfoFieldsFromIC(icInput.value, birthInput, ageInput, true);
+          });
+          icInput.dataset.icBirthListenerAttached = 'true';
+        }
+
+        if (!birthInput.value && icInput.value) {
+          this.updateBirthInfoFieldsFromIC(icInput.value, birthInput, ageInput);
+        }
+      }
+    }
+  }
+
+  updateBirthInfoFieldsFromIC(icValue, birthInput, ageInput, clearOnInvalid = false) {
+    if (!birthInput || !ageInput) return;
+    const info = deriveBirthInfoFromIC(icValue);
+    if (!info) {
+      if (clearOnInvalid) {
+        birthInput.value = '';
+        ageInput.value = '';
+      }
+      return;
+    }
+
+    birthInput.value = info.formattedDate;
+    ageInput.value = info.age;
   }
 
   // Create main KIR Profile HTML

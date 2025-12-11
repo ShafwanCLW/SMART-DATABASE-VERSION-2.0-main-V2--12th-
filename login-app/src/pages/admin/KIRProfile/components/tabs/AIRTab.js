@@ -1,5 +1,6 @@
 import { BaseTab } from '../shared/BaseTab.js';
 import { DokumenService } from '../../../../../services/backend/DokumenService.js';
+import { deriveBirthInfoFromIC } from '../shared/icUtils.js';
 
 export class AIRTab extends BaseTab {
   constructor(kirProfile) {
@@ -12,6 +13,10 @@ export class AIRTab extends BaseTab {
     this.formMode = 'create';
     this.currentSijilLahir = null;
     this.pendingSijilRemoval = false;
+    this.currentExamResults = [];
+    this.isExamFormVisible = false;
+    this.currentExamIndex = null;
+    this.statusPelajaranValue = '';
   }
 
   render() {
@@ -81,6 +86,17 @@ export class AIRTab extends BaseTab {
                     <option value="Lain-lain">Lain-lain</option>
                   </select>
                 </div>
+                <div class="form-group">
+                  <label for="status_pekerjaan_asas">Status Pekerjaan</label>
+                  <select id="status_pekerjaan_asas" name="status">
+                    <option value="">Pilih Status</option>
+                    <option value="Bekerja">Bekerja</option>
+                    <option value="Tidak Bekerja">Tidak Bekerja</option>
+                    <option value="Pencen">Pencen</option>
+                    <option value="Pelajar">Pelajar</option>
+                    <option value="Suri Rumah">Suri Rumah</option>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -88,6 +104,14 @@ export class AIRTab extends BaseTab {
             <div class="form-section">
               <h4 class="section-title">Maklumat Pendidikan</h4>
               <div class="form-grid">
+                <div class="form-group full-width">
+                  <label for="status_pelajaran">Status Pelajaran</label>
+                  <select id="status_pelajaran" name="status_pelajaran">
+                    <option value="">Pilih Status</option>
+                    <option value="Masih Belajar">Masih Belajar</option>
+                    <option value="Sudah Tamat Pelajaran">Sudah Tamat Pelajaran</option>
+                  </select>
+                </div>
                 <div class="form-group">
                   <label for="tahap_semasa">Tahap Pendidikan Semasa</label>
                   <select id="tahap_semasa" name="tahap_semasa">
@@ -119,27 +143,17 @@ export class AIRTab extends BaseTab {
                   <input type="text" id="keputusan_kafa" name="keputusan_kafa">
                 </div>
                 <div class="form-group full-width">
-                  <label for="keperluan_sokongan">Keperluan Sokongan</label>
+                  <label for="keperluan_sokongan">Catatan Tambahan</label>
                   <textarea id="keperluan_sokongan" name="keperluan_sokongan" rows="3"></textarea>
                 </div>
               </div>
+              ${this.renderExamSection()}
             </div>
 
             <!-- Pekerjaan Section -->
-            <div class="form-section">
+            <div class="form-section employment-section" style="display:none;">
               <h4 class="section-title">Maklumat Pekerjaan</h4>
               <div class="form-grid">
-                <div class="form-group">
-                  <label for="status">Status Pekerjaan</label>
-                  <select id="status" name="status">
-                    <option value="">Pilih Status</option>
-                    <option value="Bekerja">Bekerja</option>
-                    <option value="Tidak Bekerja">Tidak Bekerja</option>
-                    <option value="Pencen">Pencen</option>
-                    <option value="Pelajar">Pelajar</option>
-                    <option value="Suri Rumah">Suri Rumah</option>
-                  </select>
-                </div>
                 <div class="form-group">
                   <label for="jenis_pekerjaan">Jenis Pekerjaan</label>
                   <input type="text" id="jenis_pekerjaan" name="jenis_pekerjaan">
@@ -171,7 +185,7 @@ export class AIRTab extends BaseTab {
                     <option value="Tidak">Tidak</option>
                   </select>
                 </div>
-                <div class="form-group">
+                <div class="form-group oku-details" style="display:none;">
                   <label for="jenis_kecacatan">Jenis Kecacatan</label>
                   <input type="text" id="jenis_kecacatan" name="jenis_kecacatan">
                 </div>
@@ -189,7 +203,7 @@ export class AIRTab extends BaseTab {
                   <input type="number" id="bilangan_batang" name="bilangan_batang">
                 </div>
                 <div class="form-group full-width">
-                  <label for="penyakit_kronik">Penyakit Kronik</label>
+                  <label for="penyakit_kronik">Penyakit Kronik (Jika Ada)</label>
                   <textarea id="penyakit_kronik" name="penyakit_kronik" rows="3" placeholder="Senaraikan penyakit kronik jika ada"></textarea>
                 </div>
               </div>
@@ -262,6 +276,12 @@ export class AIRTab extends BaseTab {
     }
     setValue('hubungan', data.hubungan || '');
 
+    if (!data.tarikh_lahir && data.no_kp) {
+      this.applyBirthInfoFromIC(data.no_kp, true);
+    }
+
+    setValue('status_pelajaran', data.status_pelajaran || '');
+    this.statusPelajaranValue = data.status_pelajaran || '';
     setValue('tahap_semasa', data.tahap_semasa || '');
     setValue('sekolah_ipt', data.sekolah_ipt || '');
     setValue('keputusan', data.keputusan || '');
@@ -303,6 +323,14 @@ export class AIRTab extends BaseTab {
     this.pendingSijilRemoval = false;
     this.updateSijilPreview();
 
+    this.currentExamResults = Array.isArray(data.keputusan_exam_tahunan) ? data.keputusan_exam_tahunan.slice() : [];
+    this.isExamFormVisible = false;
+    this.renderExamList();
+    this.updateExamSectionVisibility();
+    this.updateExamFormVisibility();
+
+    this.toggleEmploymentSection(data.status || '');
+    this.toggleOkuFields(data.status_oku || '');
     this.toggleSmokingFields(data.status_merokok || '');
 
     const submitBtn = form.querySelector('button[type="submit"]');
@@ -452,6 +480,8 @@ export class AIRTab extends BaseTab {
       if (submitBtn) {
         submitBtn.textContent = 'Simpan AIR';
       }
+      this.toggleEmploymentSection('');
+      this.toggleOkuFields('');
       this.toggleSmokingFields('');
     }
     this.formMode = 'create';
@@ -463,6 +493,13 @@ export class AIRTab extends BaseTab {
       sijilInput.value = '';
     }
     this.updateSijilPreview();
+    this.currentExamResults = [];
+    this.statusPelajaranValue = '';
+    this.isExamFormVisible = false;
+    this.currentExamIndex = null;
+    this.renderExamList();
+    this.updateExamSectionVisibility();
+    this.updateExamFormVisibility();
   }
 
   updateFormVisibility(scrollToForm = false) {
@@ -580,6 +617,237 @@ export class AIRTab extends BaseTab {
       }
     }
     this.currentSijilLahir = null;
+  }
+
+  renderExamSection() {
+    return `
+      <div class="exam-section" style="${this.statusPelajaranValue === 'Masih Belajar' ? '' : 'display:none;'}">
+        <div class="exam-section-header">
+          <div>
+            <h4>Keputusan Exam Tahunan</h4>
+            <p class="section-helper">Rekod keputusan tahunan bagi sehingga enam subjek.</p>
+          </div>
+          <button type="button" class="btn btn-primary" onclick="airTab.openExamForm()">
+            <i class="fas fa-plus"></i> Tambah Keputusan
+          </button>
+        </div>
+        <div class="exam-list" id="examResultsList">
+          ${this.createExamListHTML()}
+        </div>
+        <div id="examModalContainer">
+          ${this.renderExamFormModal()}
+        </div>
+      </div>
+    `;
+  }
+
+  createExamListHTML() {
+    if (!this.currentExamResults || this.currentExamResults.length === 0) {
+      return `
+        <div class="empty-state">
+          <p>Tiada keputusan exam direkodkan.</p>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="exam-list-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;">
+        ${this.currentExamResults.map((exam, index) => `
+          <div class="exam-list-item" onclick="airTab.openExamForm(${index})" style="border:1px solid #e2e8f0;border-radius:12px;padding:1rem;background:#fff;box-shadow:0 6px 18px rgba(15,23,42,0.08);cursor:pointer;transition:transform .15s;">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <div>
+                <div style="font-size:1.1rem;font-weight:600;color:#0f172a;">${this.escapeHtml(exam.tahun || 'Tiada Tahun')}</div>
+                <div style="color:#6366f1;font-weight:600;">${this.escapeHtml(exam.bulan || 'Tiada Bulan')}</div>
+              </div>
+                <button type="button" class="btn btn-sm btn-danger action-btn" onclick="event.stopPropagation(); airTab.confirmDeleteExamEntry(${index})">
+                  <i class="fas fa-trash"></i> Padam
+                </button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  createExamFormHTML() {
+    return `
+      <div class="form-row">
+        <div class="form-group">
+          <label for="exam_year">Tahun</label>
+          <input type="number" id="exam_year" min="2000" max="2100">
+        </div>
+        <div class="form-group">
+          <label for="exam_month">Bulan</label>
+          <select id="exam_month">
+            <option value="">Pilih Bulan</option>
+            ${['Januari','Februari','Mac','April','Mei','Jun','Julai','Ogos','September','Oktober','November','Disember']
+              .map(month => `<option value="${month}">${month}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-grid exam-subject-grid">
+        ${this.createSubjectInput('Bahasa Melayu', 'grade_bm')}
+        ${this.createSubjectInput('Bahasa Inggeris', 'grade_bi')}
+        ${this.createSubjectInput('Matematik', 'grade_math')}
+        ${this.createSubjectInput('Sains', 'grade_science')}
+        ${this.createSubjectInput('Pendidikan Islam', 'grade_islam')}
+        ${this.createSubjectInput('Sejarah', 'grade_history')}
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" onclick="airTab.cancelExamForm()">Batal</button>
+        <button type="button" class="btn btn-primary" onclick="airTab.saveExamEntry()">Simpan Keputusan</button>
+      </div>
+    `;
+  }
+
+  createSubjectInput(label, id) {
+    return `
+      <div class="form-group">
+        <label for="${id}">${label}</label>
+        <input type="text" id="${id}" maxlength="2" placeholder="Contoh: A+">
+      </div>
+    `;
+  }
+
+  renderExamList() {
+    const container = document.getElementById('examResultsList');
+    if (container) {
+      container.innerHTML = this.createExamListHTML();
+    }
+  }
+
+  updateExamSectionVisibility() {
+    const section = document.querySelector('.exam-section');
+    if (section) {
+      section.style.display = this.statusPelajaranValue === 'Masih Belajar' ? '' : 'none';
+    }
+  }
+
+  updateExamFormVisibility() {
+    const container = document.getElementById('examModalContainer');
+    if (container) {
+      container.innerHTML = this.renderExamFormModal();
+    }
+  }
+
+  openExamForm(index = null) {
+    this.currentExamIndex = typeof index === 'number' ? index : null;
+    this.isExamFormVisible = true;
+    this.updateExamFormVisibility();
+    this.populateExamForm(this.currentExamIndex);
+  }
+
+  populateExamForm(index) {
+    const yearInput = document.getElementById('exam_year');
+    const monthInput = document.getElementById('exam_month');
+    const fields = {
+      grade_bm: document.getElementById('grade_bm'),
+      grade_bi: document.getElementById('grade_bi'),
+      grade_math: document.getElementById('grade_math'),
+      grade_science: document.getElementById('grade_science'),
+      grade_islam: document.getElementById('grade_islam'),
+      grade_history: document.getElementById('grade_history')
+    };
+
+    if (!yearInput || !monthInput) return;
+    const entry = typeof index === 'number' ? this.currentExamResults[index] : null;
+    yearInput.value = entry?.tahun || '';
+    monthInput.value = entry?.bulan || '';
+    Object.entries(fields).forEach(([key, input]) => {
+      if (input) {
+        input.value = entry ? (entry[this.subjectFieldMap(key)] || '') : '';
+      }
+    });
+  }
+
+  subjectFieldMap(fieldId) {
+    return {
+      grade_bm: 'bahasa_melayu',
+      grade_bi: 'bahasa_inggeris',
+      grade_math: 'matematik',
+      grade_science: 'sains',
+      grade_islam: 'pendidikan_islam',
+      grade_history: 'sejarah'
+    }[fieldId];
+  }
+
+  cancelExamForm() {
+    this.isExamFormVisible = false;
+    this.currentExamIndex = null;
+    this.updateExamFormVisibility();
+  }
+
+  saveExamEntry() {
+    const yearInput = document.getElementById('exam_year');
+    const monthInput = document.getElementById('exam_month');
+    if (!yearInput || !monthInput) return;
+
+    const tahun = yearInput.value.trim();
+    const bulan = monthInput.value.trim();
+    if (!tahun || !bulan) {
+      this.kirProfile.showToast('Sila isi Tahun dan Bulan untuk keputusan exam.', 'error');
+      return;
+    }
+
+    const entry = {
+      id: typeof this.currentExamIndex === 'number' ? this.currentExamResults[this.currentExamIndex]?.id : this.generateExamId(),
+      tahun,
+      bulan,
+      bahasa_melayu: document.getElementById('grade_bm')?.value.trim() || '',
+      bahasa_inggeris: document.getElementById('grade_bi')?.value.trim() || '',
+      matematik: document.getElementById('grade_math')?.value.trim() || '',
+      sains: document.getElementById('grade_science')?.value.trim() || '',
+      pendidikan_islam: document.getElementById('grade_islam')?.value.trim() || '',
+      sejarah: document.getElementById('grade_history')?.value.trim() || ''
+    };
+
+    if (typeof this.currentExamIndex === 'number') {
+      this.currentExamResults[this.currentExamIndex] = entry;
+    } else {
+      this.currentExamResults.push(entry);
+    }
+
+    this.isExamFormVisible = false;
+    this.currentExamIndex = null;
+    this.renderExamList();
+    this.updateExamFormVisibility();
+  }
+
+  deleteExamEntry(index) {
+    if (typeof index !== 'number') return;
+    this.currentExamResults.splice(index, 1);
+    this.renderExamList();
+  }
+
+  confirmDeleteExamEntry(index) {
+    const entry = this.currentExamResults[index];
+    const label = entry ? `${entry.bulan || ''} ${entry.tahun || ''}`.trim() : '';
+    const message = label ? `Adakah anda pasti mahu memadam keputusan ${label}?` : 'Adakah anda pasti mahu memadam keputusan ini?';
+    if (confirm(message)) {
+      this.deleteExamEntry(index);
+    }
+  }
+
+  generateExamId() {
+    return `exam_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  renderExamFormModal() {
+    if (!this.isExamFormVisible) return '';
+    return `
+      <div class="exam-modal" style="position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;">
+        <div class="exam-modal-overlay" onclick="airTab.cancelExamForm()" style="position:absolute;inset:0;background:rgba(15,23,42,0.55);"></div>
+        <div class="exam-modal-content" style="position:relative;background:#fff;border-radius:16px;padding:1.25rem;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(15,23,42,0.35);">
+          <div class="exam-modal-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+            <h4>${this.currentExamIndex !== null ? 'Kemaskini' : 'Tambah'} Keputusan Exam</h4>
+            <button type="button" class="btn btn-link" onclick="airTab.cancelExamForm()"> 
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          ${this.createExamFormHTML()}
+        </div>
+      </div>
+    `;
   }
 
   // AIR Drawer Methods (legacy)
@@ -739,7 +1007,7 @@ export class AIRTab extends BaseTab {
           
           <div class="form-row">
             <div class="form-group">
-              <label for="air_keperluan_sokongan">Keperluan Sokongan</label>
+              <label for="air_keperluan_sokongan">Catatan Tambahan</label>
               <textarea id="air_keperluan_sokongan" name="keperluan_sokongan" rows="3">${data.keperluan_sokongan || ''}</textarea>
             </div>
             
@@ -1067,6 +1335,40 @@ export class AIRTab extends BaseTab {
     }
   }
 
+  toggleEmploymentSection(statusValue) {
+    const section = document.querySelector('.employment-section');
+    if (section) {
+      section.style.display = statusValue === 'Bekerja' ? '' : 'none';
+    }
+  }
+
+  toggleOkuFields(value) {
+    const okuGroup = document.querySelector('.oku-details');
+    if (okuGroup) {
+      okuGroup.style.display = value === 'Ya' ? '' : 'none';
+    }
+  }
+
+  applyBirthInfoFromIC(icValue, clearOnInvalid = false) {
+    const form = document.getElementById('airForm');
+    if (!form) return;
+    const birthInput = form.querySelector('[name="tarikh_lahir"]');
+    const ageInput = form.querySelector('[name="umur"]');
+    if (!birthInput || !ageInput) return;
+
+    const birthInfo = deriveBirthInfoFromIC(icValue);
+    if (!birthInfo) {
+      if (clearOnInvalid) {
+        birthInput.value = '';
+        ageInput.value = '';
+      }
+      return;
+    }
+
+    birthInput.value = birthInfo.formattedDate;
+    ageInput.value = birthInfo.age;
+  }
+
   // Data Management Methods
   async loadAIRData() {
     try {
@@ -1128,6 +1430,7 @@ export class AIRTab extends BaseTab {
     }
     this.isSavingAIR = true;
     const payload = { ...formData };
+    payload.keputusan_exam_tahunan = this.currentExamResults || [];
     delete payload.sijil_lahir;
     
     try {
@@ -1349,6 +1652,7 @@ export class AIRTab extends BaseTab {
 
         const sijilInput = form.querySelector('#sijil_lahir');
         const sijilFile = sijilInput && sijilInput.files ? sijilInput.files[0] || null : null;
+        data.keputusan_exam_tahunan = this.currentExamResults;
         
         await this.saveAIR(data, sijilFile);
       });
@@ -1376,6 +1680,35 @@ export class AIRTab extends BaseTab {
       const noKpInput = form.querySelector('#no_kp');
       if (noKpInput) {
         this.attachICInputMask(noKpInput);
+        noKpInput.addEventListener('input', (e) => {
+          this.applyBirthInfoFromIC(e.target.value, true);
+        });
+      }
+
+      const statusSelect = form.querySelector('[name="status"]');
+      if (statusSelect) {
+        statusSelect.addEventListener('change', (e) => {
+          this.toggleEmploymentSection(e.target.value);
+        });
+      }
+
+      const statusPelajaranSelect = form.querySelector('[name="status_pelajaran"]');
+      if (statusPelajaranSelect) {
+        statusPelajaranSelect.addEventListener('change', (e) => {
+          this.statusPelajaranValue = e.target.value;
+          this.updateExamSectionVisibility();
+          if (this.statusPelajaranValue !== 'Masih Belajar') {
+            this.isExamFormVisible = false;
+            this.updateExamFormVisibility();
+          }
+        });
+      }
+
+      const okuSelect = form.querySelector('[name="status_oku"]');
+      if (okuSelect) {
+        okuSelect.addEventListener('change', (e) => {
+          this.toggleOkuFields(e.target.value);
+        });
       }
 
       const sijilInput = form.querySelector('#sijil_lahir');

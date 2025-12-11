@@ -1,4 +1,5 @@
 import { BaseTab } from '../shared/BaseTab.js';
+import { deriveBirthInfoFromIC } from '../shared/icUtils.js';
 
 /**
  * PKIRTab - Manages PKIR (Pasangan Ketua Isi Rumah / Spouse) functionality
@@ -349,6 +350,10 @@ export class PKIRTab extends BaseTab {
           ageInput.value = age;
         }
       }
+      const icInput = form.querySelector('#no_kp_pasangan');
+      if (icInput && !pkir.tarikh_lahir_pasangan && icInput.value) {
+        this.applyBirthInfoFromIC(icInput.value, true);
+      }
       
       // Update form button text
       const submitBtn = form.querySelector('button[type="submit"]');
@@ -471,6 +476,26 @@ export class PKIRTab extends BaseTab {
     return text.replace(/[&<>"']/g, m => map[m]);
   }
 
+  applyBirthInfoFromIC(icValue, clearOnInvalid = false) {
+    const form = document.getElementById('pkirForm');
+    if (!form) return;
+    const birthInput = form.querySelector('[name="tarikh_lahir_pasangan"]');
+    const ageInput = form.querySelector('[name="umur_pasangan"]');
+    if (!birthInput || !ageInput) return;
+
+    const info = deriveBirthInfoFromIC(icValue);
+    if (!info) {
+      if (clearOnInvalid) {
+        birthInput.value = '';
+        ageInput.value = '';
+      }
+      return;
+    }
+
+    birthInput.value = info.formattedDate;
+    ageInput.value = info.age;
+  }
+
   setupEventListeners() {
     // Set global reference for backward compatibility
     window.pkirTab = this;
@@ -510,6 +535,13 @@ export class PKIRTab extends BaseTab {
       if (smokingSelect) {
         smokingSelect.addEventListener('change', (e) => {
           this.toggleSmokingFields(e.target.value);
+        });
+      }
+
+      const icInput = form.querySelector('#no_kp_pasangan');
+      if (icInput) {
+        icInput.addEventListener('input', (e) => {
+          this.applyBirthInfoFromIC(e.target.value, true);
         });
       }
       
