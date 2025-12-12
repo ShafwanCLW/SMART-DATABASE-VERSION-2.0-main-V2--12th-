@@ -1,5 +1,5 @@
 // Firebase configuration and initialization
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
@@ -22,14 +22,15 @@ if (!firebaseConfig.apiKey || !firebaseConfig.authDomain || !firebaseConfig.proj
 }
 
 // Initialize Firebase or mock services based on configuration availability
-let auth, db, storage;
+let auth, db, storage, firebaseApp = null;
 
 if (firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.projectId) {
   // Initialize Firebase with real configuration
-  const app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
-  storage = getStorage(app);
+  const existingApps = getApps();
+  firebaseApp = existingApps.length > 0 ? existingApps[0] : initializeApp(firebaseConfig);
+  auth = getAuth(firebaseApp);
+  db = getFirestore(firebaseApp);
+  storage = getStorage(firebaseApp);
 } else {
   // Mock implementations for development
   auth = {
@@ -50,7 +51,7 @@ if (firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.project
 }
 
 // Export the services (real or mock)
-export { auth, db, storage };
+export { auth, db, storage, firebaseConfig, firebaseApp };
 
-// Export a mock app if real app is not initialized
-export default firebaseConfig.apiKey ? initializeApp(firebaseConfig) : { name: 'mock-app' };
+// Export initialized app (may be null/mocked)
+export default firebaseApp;

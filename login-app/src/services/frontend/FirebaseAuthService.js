@@ -1,4 +1,5 @@
 // Firebase Authentication Service
+import { initializeApp, getApps } from 'firebase/app';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
@@ -7,7 +8,8 @@ import {
   updateProfile,
   signInWithPopup,
   GoogleAuthProvider,
-  sendEmailVerification
+  sendEmailVerification,
+  getAuth
 } from 'firebase/auth';
 import { 
   doc, 
@@ -22,11 +24,26 @@ import {
   where,
   orderBy
 } from 'firebase/firestore';
-import { auth, db } from '../database/firebase.js';
+import { auth, db, firebaseConfig } from '../database/firebase.js';
 
 // Current user state
 let currentUser = null;
 let userProfile = null;
+let secondaryAuthInstance = null;
+
+function getAdminRegistrationAuth() {
+  if (secondaryAuthInstance) return secondaryAuthInstance;
+  if (!firebaseConfig?.apiKey) {
+    throw new Error('Firebase configuration is missing. Tidak dapat mencipta pengguna baharu.');
+  }
+  
+  const secondaryAppName = 'admin-registration';
+  const apps = getApps();
+  const existingApp = apps.find(app => app.name === secondaryAppName);
+  const secondaryApp = existingApp || initializeApp(firebaseConfig, secondaryAppName);
+  secondaryAuthInstance = getAuth(secondaryApp);
+  return secondaryAuthInstance;
+}
 
 // Authentication methods
 export class FirebaseAuthService {
@@ -91,10 +108,11 @@ export class FirebaseAuthService {
     }
   }
 
-  static async register(email, password, name, role = 'user') {
+  static async register(email, password, name, role = 'user', extraProfileData = {}) {
     try {
-      // Create user with Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      // Create user with Firebase Auth using a secondary app to avoid logging out current admin
+      const registrationAuth = getAdminRegistrationAuth();
+      const userCredential = await createUserWithEmailAndPassword(registrationAuth, email, password);
       const user = userCredential.user;
       
       // Update the user's display name
@@ -107,15 +125,28 @@ export class FirebaseAuthService {
       });
       
       // Create user profile in Firestore
-      const userProfile = {
+      const now = new Date();
+      const baseProfile = {
         name: name,
         email: email,
         role: role,
         status: 'pending_verification', // Changed from 'active' to indicate pending verification
         emailVerified: false,
-        createdAt: new Date(),
-        lastLogin: new Date()
+        createdAt: now,
+        lastLogin: now
       };
+      
+      const userProfile = {
+        ...baseProfile,
+        ...(extraProfileData || {})
+      };
+      
+      if (!userProfile.status) {
+        userProfile.status = 'pending_verification';
+      }
+      if (!userProfile.createdBy) {
+        userProfile.createdBy = 'self-service';
+      }
       
       await setDoc(doc(db, 'users', user.uid), userProfile);
       
@@ -131,6 +162,14 @@ export class FirebaseAuthService {
     } catch (error) {
       console.error('Registration error:', error);
       throw new Error(error.message || 'Registration failed');
+    } finally {
+      if (secondaryAuthInstance) {
+        try {
+          await signOut(secondaryAuthInstance);
+        } catch (logoutError) {
+          console.warn('Failed to clear secondary auth session:', logoutError);
+        }
+      }
     }
   }
 

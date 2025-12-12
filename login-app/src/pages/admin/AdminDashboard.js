@@ -1,5 +1,10 @@
 // Import Firebase service for user management
 import { FirebaseAuthService } from '../../services/frontend/FirebaseAuthService.js';
+import { createRegistrationFormMarkup } from '../auth/LoginForm.js';
+import { normalizeNoKP } from '../../services/database/collections.js';
+import { KIRService } from '../../services/backend/KIRService.js';
+
+let currentAddUserContext = null;
 // Note: Firebase functions are dynamically imported in the code
 
 // Admin dashboard creation functions
@@ -178,6 +183,78 @@ export function createAdminMainContent() {
       padding: 20px;
       overflow-y: auto;
       flex: 1;
+    }
+    
+    .add-user-modal .modal-content {
+      width: 100%;
+      max-width: 560px;
+    }
+    
+    .admin-add-user-status {
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      display: none;
+      margin-bottom: 10px;
+    }
+    
+    .admin-add-user-status.success {
+      display: block;
+      background: #ecfdf3;
+      color: #047857;
+      border: 1px solid #6ee7b7;
+    }
+    
+    .admin-add-user-status.error {
+      display: block;
+      background: #fef2f2;
+      color: #b91c1c;
+      border: 1px solid #fecaca;
+    }
+    
+    .admin-add-user-hint {
+      font-size: 0.9rem;
+      color: #475569;
+      background: #f8fafc;
+      border-radius: 6px;
+      padding: 12px;
+      border: 1px dashed #cbd5f5;
+    }
+    
+    .admin-add-user-hint button {
+      margin-top: 8px;
+    }
+    
+    .quick-kir-modal .modal-content {
+      max-width: 420px;
+    }
+    
+    .admin-add-user-step {
+      margin-bottom: 20px;
+      padding: 16px;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      background: #fff;
+    }
+    
+    .admin-add-user-step h3 {
+      margin-top: 0;
+      margin-bottom: 10px;
+      font-size: 1.1rem;
+      color: #1f2937;
+    }
+    
+    .admin-verified-info {
+      padding: 12px;
+      background: #eef2ff;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      font-size: 0.95rem;
+      color: #4338ca;
+    }
+    
+    .admin-verified-info span {
+      font-weight: 600;
     }
     
     /* Transactions Styles */
@@ -2219,10 +2296,480 @@ export async function initializeUserManagement() {
   
   // Initialize
   renderUsers();
+  setupAddUserButton();
 }
 
-// Import KIR Service
-import { KIRService } from '../../services/backend/KIRService.js';
+function setupAddUserButton() {
+  const addUserBtn = document.getElementById('addUserBtn');
+  if (addUserBtn && !addUserBtn.dataset.listenerAttached) {
+    addUserBtn.dataset.listenerAttached = 'true';
+    addUserBtn.addEventListener('click', () => openAddUserModal());
+  }
+}
+
+function openAddUserModal(prefill = {}) {
+  closeAddUserModal();
+  resetAddUserContext();
+  
+  const modal = document.createElement('div');
+  modal.className = 'modal add-user-modal';
+  modal.id = 'add-user-modal';
+  modal.innerHTML = getAddUserModalTemplate();
+  document.body.appendChild(modal);
+  modal.style.display = 'flex';
+  
+  const closeBtn = modal.querySelector('#close-add-user-modal');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', closeAddUserModal);
+  }
+  
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) {
+      closeAddUserModal();
+    }
+  });
+  
+  const form = modal.querySelector('#adminAddUserForm');
+  if (form) {
+    form.addEventListener('submit', handleAdminAddUser);
+    
+    if (prefill.name) {
+      const nameInput = form.querySelector('#adminRegisterName');
+      if (nameInput) nameInput.value = prefill.name;
+    }
+    
+    if (prefill.email) {
+      const emailInput = form.querySelector('#adminRegisterEmail');
+      if (emailInput) emailInput.value = prefill.email;
+    }
+  }
+  
+  const noKpForm = modal.querySelector('#adminNoKPCheckForm');
+  if (noKpForm) {
+    noKpForm.addEventListener('submit', handleAdminNoKPCheck);
+  }
+  
+  const noKpInput = modal.querySelector('#adminNoKPInput');
+  if (noKpInput) {
+    if (prefill.noKp) {
+      noKpInput.value = prefill.noKp;
+    }
+    noKpInput.addEventListener('input', (event) => {
+      event.target.value = normalizeNoKP(event.target.value).slice(0, 12);
+    });
+  }
+}
+
+function closeAddUserModal() {
+  const modal = document.getElementById('add-user-modal');
+  if (modal) {
+    modal.remove();
+  }
+  resetAddUserContext();
+}
+
+function getAddUserModalTemplate() {
+  const roleFieldHTML = `
+    <div class="form-group">
+      <label for="adminRegisterRole">Role</label>
+      <select id="adminRegisterRole" name="role" required>
+        <option value="user" selected>User</option>
+        <option value="admin">Admin</option>
+      </select>
+    </div>
+  `;
+  
+  const formMarkup = createRegistrationFormMarkup({
+    formId: 'adminAddUserForm',
+    formClass: 'auth-form register-form admin-add-user-form',
+    visible: true,
+    includeGoogleButton: false,
+    submitButtonId: 'admin-add-user-submit',
+    submitButtonText: 'Create User',
+    errorMessageId: 'admin-add-user-error',
+    successMessageId: 'admin-add-user-success',
+    idPrefix: 'adminRegister',
+    roleFieldHTML
+  });
+  
+  return `
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Tambah Akaun Pengguna</h2>
+        <span class="close-modal" id="close-add-user-modal">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div id="admin-add-user-status" class="admin-add-user-status"></div>
+        
+        <div id="adminNoKPStep" class="admin-add-user-step">
+          <h3>Langkah 1: Sahkan No. Kad Pengenalan</h3>
+          <form id="adminNoKPCheckForm">
+            <div class="form-group">
+              <label for="adminNoKPInput">No. Kad Pengenalan</label>
+              <input 
+                type="text" 
+                id="adminNoKPInput" 
+                name="no_kp" 
+                required 
+                maxlength="12" 
+                inputmode="numeric" 
+                placeholder="123456789012">
+              <small class="form-help">12 digit nombor sahaja, tanpa jarak atau tanda.</small>
+            </div>
+            <div class="modal-actions">
+              <button type="submit" class="btn btn-primary">Semak No. KP</button>
+            </div>
+          </form>
+          <div class="admin-add-user-hint">
+            <p>Sistem akan menyemak koleksi <code>index_nokp</code>. Jika No. KP belum berdaftar, borang KIR baharu akan dibuka terlebih dahulu.</p>
+          </div>
+        </div>
+        
+        <div id="adminUserFormStep" class="admin-add-user-step" style="display: none;">
+          <h3>Langkah 2: Cipta Akaun Pengguna</h3>
+          <div class="admin-verified-info">
+            <p>No. KP disahkan: <span id="adminVerifiedNoKP">-</span></p>
+            <p>Nama KIR: <span id="adminVerifiedName">-</span></p>
+          </div>
+          ${formMarkup}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function resetAddUserContext() {
+  currentAddUserContext = null;
+}
+
+function setAddUserStatus(message, type = 'info') {
+  const statusElement = document.getElementById('admin-add-user-status');
+  if (!statusElement) return;
+  
+  statusElement.textContent = message;
+  statusElement.style.display = 'block';
+  statusElement.className = 'admin-add-user-status';
+  statusElement.style.background = '';
+  statusElement.style.color = '';
+  statusElement.style.border = '';
+  
+  if (type === 'success') {
+    statusElement.classList.add('success');
+  } else if (type === 'error') {
+    statusElement.classList.add('error');
+  } else {
+    statusElement.style.background = '#eef2ff';
+    statusElement.style.color = '#4338ca';
+    statusElement.style.border = '1px solid #c7d2fe';
+  }
+}
+
+async function handleAdminNoKPCheck(event) {
+  event.preventDefault();
+  const modal = document.getElementById('add-user-modal');
+  if (!modal) return;
+  
+  const noKpInput = modal.querySelector('#adminNoKPInput');
+  if (!noKpInput) return;
+  
+  const rawValue = noKpInput.value.trim();
+  const normalizedNoKP = normalizeNoKP(rawValue);
+  
+  if (!normalizedNoKP || normalizedNoKP.length !== 12) {
+    setAddUserStatus('Sila masukkan No. KP yang sah (12 digit).', 'error');
+    return;
+  }
+  
+  try {
+    setAddUserStatus('Menyemak No. KP dengan index...', 'info');
+    let indexRecord = await KIRService.getNoKPIndex(normalizedNoKP);
+    
+    if (indexRecord && (indexRecord.kir_id || indexRecord.owner_id)) {
+      showUserFormStep({
+        indexRecord,
+        normalizedNoKP,
+        displayNoKP: indexRecord.no_kp_display || rawValue
+      });
+      setAddUserStatus('No. KP disahkan. Sila lengkapkan maklumat pengguna.', 'success');
+      return;
+    }
+    
+    setAddUserStatus('No. KP tidak dijumpai. Membuka borang KIR baharu...', 'info');
+    const createdRecord = await openQuickKIRCreationModal({
+      prefillNoKP: normalizedNoKP
+    });
+    
+    if (createdRecord && createdRecord.indexRecord) {
+      showUserFormStep({
+        indexRecord: createdRecord.indexRecord,
+        normalizedNoKP: createdRecord.indexRecord.no_kp || normalizedNoKP,
+        displayNoKP: createdRecord.indexRecord.no_kp_display || normalizedNoKP,
+        fallbackName: createdRecord.kirName
+      });
+      setAddUserStatus('KIR baharu berjaya dicipta. Sila lengkapkan maklumat pengguna.', 'success');
+    } else {
+      setAddUserStatus('KIR tidak dicipta. Sila cuba lagi.', 'error');
+    }
+    
+  } catch (error) {
+    console.error('No. KP check failed:', error);
+    setAddUserStatus(error.message || 'Gagal menyemak No. KP.', 'error');
+  }
+}
+
+function showUserFormStep({ indexRecord, normalizedNoKP, displayNoKP, fallbackName = '' }) {
+  const modal = document.getElementById('add-user-modal');
+  if (!modal) return;
+  
+  const stepOne = modal.querySelector('#adminNoKPStep');
+  const stepTwo = modal.querySelector('#adminUserFormStep');
+  if (stepOne) stepOne.style.display = 'none';
+  if (stepTwo) stepTwo.style.display = 'block';
+  
+  const nameValue = indexRecord?.nama || fallbackName || '';
+  const verifiedNoKP = modal.querySelector('#adminVerifiedNoKP');
+  const verifiedName = modal.querySelector('#adminVerifiedName');
+  const nameInput = modal.querySelector('#adminRegisterName');
+  
+  if (verifiedNoKP) {
+    verifiedNoKP.textContent = displayNoKP || normalizedNoKP;
+  }
+  if (verifiedName) {
+    verifiedName.textContent = nameValue || '(Tiada nama dalam rekod)';
+  }
+  if (nameInput) {
+    nameInput.value = nameValue;
+  }
+  
+  const emailInput = modal.querySelector('#adminRegisterEmail');
+  if (emailInput) {
+    setTimeout(() => emailInput.focus(), 150);
+  }
+  
+  currentAddUserContext = {
+    normalizedNoKP,
+    displayNoKP: displayNoKP || normalizedNoKP,
+    indexRecord: indexRecord || null,
+    kirId: indexRecord?.kir_id || indexRecord?.owner_id || '',
+    inferredName: nameValue
+  };
+}
+
+async function handleAdminAddUser(event) {
+  event.preventDefault();
+  const form = event.target;
+  const submitButton = form.querySelector('#admin-add-user-submit');
+  const originalText = submitButton?.innerHTML;
+  
+  if (!currentAddUserContext) {
+    setAddUserStatus('Sila sahkan No. KP terlebih dahulu.', 'error');
+    return;
+  }
+  
+  const formData = new FormData(form);
+  const name = (formData.get('name') || '').trim();
+  const email = (formData.get('email') || '').trim();
+  const password = formData.get('password') || '';
+  const confirmPassword = formData.get('confirmPassword') || '';
+  const role = formData.get('role') || 'user';
+  
+  if (!name || !email || !password || !confirmPassword) {
+    setAddUserStatus('Sila lengkapkan semua medan yang diperlukan.', 'error');
+    return;
+  }
+  
+  if (password !== confirmPassword) {
+    setAddUserStatus('Kata laluan dan pengesahan tidak sepadan.', 'error');
+    return;
+  }
+  
+  try {
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.innerHTML = '<div class="loading-spinner white"></div>Memproses...';
+    }
+    
+    setAddUserStatus('Mengesahkan No. KP dengan index_nokp...', 'info');
+    let indexRecord = currentAddUserContext.indexRecord;
+    const normalizedNoKP = currentAddUserContext.normalizedNoKP;
+    const displayNoKP = currentAddUserContext.displayNoKP;
+    
+    setAddUserStatus('Mencipta akaun pengguna dan memautkan KIR...', 'info');
+    
+    const adminUser = FirebaseAuthService.getCurrentUser();
+    const extraProfile = {
+      createdBy: 'admin',
+      createdByUid: adminUser?.uid || '',
+      createdByEmail: adminUser?.email || '',
+      no_kp: normalizedNoKP,
+      no_kp_display: displayNoKP,
+      kir_id: currentAddUserContext.kirId || indexRecord?.kir_id || indexRecord?.owner_id || '',
+      linked_kir_name: name,
+      index_owner_type: indexRecord?.owner_type || 'KIR',
+      index_owner_id: indexRecord?.owner_id || indexRecord?.kir_id || ''
+    };
+    
+    await FirebaseAuthService.register(email, password, name, role, extraProfile);
+    
+    setAddUserStatus('Akaun pengguna berjaya dicipta dan dipautkan kepada KIR.', 'success');
+    
+    setTimeout(() => {
+      closeAddUserModal();
+      initializeUserManagement();
+    }, 1200);
+    
+  } catch (error) {
+    console.error('Error creating admin user:', error);
+    setAddUserStatus(error.message || 'Gagal mencipta pengguna.', 'error');
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.innerHTML = originalText || 'Create User';
+    }
+  }
+}
+
+async function openQuickKIRCreationModal({ prefillName = '', prefillNoKP = '' } = {}) {
+  if (document.getElementById('quick-kir-modal')) {
+    return null;
+  }
+  
+  return new Promise((resolve) => {
+    const modal = document.createElement('div');
+    modal.className = 'modal quick-kir-modal';
+    modal.id = 'quick-kir-modal';
+    modal.innerHTML = getQuickKIRModalTemplate(prefillName, prefillNoKP);
+    document.body.appendChild(modal);
+    modal.style.display = 'flex';
+    
+    const closeModal = () => {
+      modal.remove();
+      resolve(null);
+    };
+    
+    const closeBtn = modal.querySelector('#close-quick-kir-modal');
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) closeModal();
+    });
+    
+    const cancelBtn = modal.querySelector('#cancel-quick-kir');
+    if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+    
+    const form = modal.querySelector('#quickKirForm');
+    const statusElement = modal.querySelector('#quick-kir-status');
+    const nameInput = modal.querySelector('#quickKirName');
+    const icInput = modal.querySelector('#quickKirNoKP');
+    
+    if (nameInput && prefillName) nameInput.value = prefillName;
+    if (icInput) {
+      if (prefillNoKP) icInput.value = prefillNoKP;
+      icInput.addEventListener('input', (event) => {
+        event.target.value = normalizeNoKP(event.target.value).slice(0, 12);
+      });
+    }
+    
+    const setStatus = (message, type = 'info') => {
+      statusElement.textContent = message;
+      statusElement.style.display = 'block';
+      statusElement.className = 'admin-add-user-status';
+      if (type === 'success') {
+        statusElement.classList.add('success');
+      } else if (type === 'error') {
+        statusElement.classList.add('error');
+      } else {
+        statusElement.style.background = '#eef2ff';
+        statusElement.style.color = '#4338ca';
+        statusElement.style.border = '1px solid #c7d2fe';
+      }
+    };
+    
+    if (form) {
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const submitBtn = form.querySelector('#quickKirSubmit');
+        const originalText = submitBtn?.innerHTML;
+        
+        const kirName = (nameInput?.value || '').trim();
+        const kirNoKpRaw = (icInput?.value || '').trim();
+        const kirNoKp = normalizeNoKP(kirNoKpRaw);
+        
+        if (!kirName || kirName.length < 2) {
+          setStatus('Nama penuh diperlukan.', 'error');
+          return;
+        }
+        
+        if (!kirNoKp || kirNoKp.length !== 12) {
+          setStatus('No. KP mesti 12 digit nombor.', 'error');
+          return;
+        }
+        
+        try {
+          if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<div class="loading-spinner white"></div>Mencipta...';
+          }
+          
+          setStatus('Mencipta rekod KIR baharu...', 'info');
+          
+          const result = await KIRService.createKIR({
+            nama_penuh: kirName,
+            no_kp: kirNoKp,
+            status_rekod: 'Draf'
+          });
+          
+          const indexRecord = await KIRService.getNoKPIndex(kirNoKp);
+          
+          setStatus('KIR berjaya dicipta.', 'success');
+          setTimeout(() => {
+            modal.remove();
+            resolve({ kirId: result.id, indexRecord, kirName });
+          }, 600);
+          
+        } catch (error) {
+          console.error('Quick KIR creation failed:', error);
+          setStatus(error.message || 'Gagal mencipta KIR.', 'error');
+        } finally {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText || 'Cipta KIR';
+          }
+        }
+      });
+    }
+  });
+}
+
+function getQuickKIRModalTemplate(prefillName, prefillNoKP) {
+  return `
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Tambah KIR Baharu</h2>
+        <span class="close-modal" id="close-quick-kir-modal">&times;</span>
+      </div>
+      <div class="modal-body">
+        <p class="admin-add-user-hint">No. KP tidak ditemui dalam index. Sila cipta rekod KIR ringkas untuk meneruskan.</p>
+        <div id="quick-kir-status" class="admin-add-user-status"></div>
+        <form id="quickKirForm">
+          <div class="form-group">
+            <label for="quickKirName">Nama Penuh</label>
+            <input type="text" id="quickKirName" name="nama_penuh" required placeholder="Masukkan nama penuh" value="${prefillName || ''}">
+          </div>
+          <div class="form-group">
+            <label for="quickKirNoKP">No. Kad Pengenalan</label>
+            <input type="text" id="quickKirNoKP" name="no_kp" required maxlength="12" placeholder="123456789012" value="${prefillNoKP || ''}">
+            <small class="form-help">12 digit nombor sahaja, tanpa jarak atau tanda.</small>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" id="cancel-quick-kir">Batal</button>
+            <button type="submit" class="btn btn-primary" id="quickKirSubmit">Cipta KIR</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
 
 // KIR Management functionality
 export function initializeKIRManagement(tableBodyId = 'kirTableBody') {
@@ -2985,13 +3532,28 @@ async function saveProgramNew() {
 
 // Initialize user management when users section is activated
 export function setupUserManagementListeners() {
-  const userManagementNav = document.querySelector('[data-section="users"]');
-  if (userManagementNav) {
-    userManagementNav.addEventListener('click', () => {
-      setTimeout(async () => {
-        await initializeUserManagement();
-      }, 100);
+  const selectors = ['[data-section="user-management"]', '[data-section="users"]'];
+  const navElements = selectors
+    .map(selector => document.querySelector(selector))
+    .filter(Boolean);
+  
+  navElements.forEach(navEl => {
+    if (navEl.dataset.userManagementBound) return;
+    navEl.dataset.userManagementBound = 'true';
+    navEl.addEventListener('click', () => {
+      setTimeout(() => {
+        initializeUserManagement();
+      }, 120);
     });
+  });
+  
+  // Initialize immediately if section already rendered/active
+  const section = document.getElementById('user-management-content');
+  if (section && !section.dataset.userManagementInitialized) {
+    section.dataset.userManagementInitialized = 'true';
+    setTimeout(() => {
+      initializeUserManagement();
+    }, 50);
   }
 }
 
