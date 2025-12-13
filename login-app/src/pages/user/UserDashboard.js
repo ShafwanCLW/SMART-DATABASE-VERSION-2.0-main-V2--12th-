@@ -1,4 +1,5 @@
 import { KIRProfile } from '../admin/KIRProfile.js';
+import { FirebaseAuthService } from '../../services/frontend/FirebaseAuthService.js';
 
 // User dashboard component
 export function createUserSidebar(user) {
@@ -45,6 +46,62 @@ export function createUserSidebar(user) {
 
 export function createUserMainContent() {
   return `
+    <style>
+      #user-settings-wrapper .setting-card {
+        background: #fff;
+        border-radius: 18px;
+        padding: 24px;
+        margin-top: 1.5rem;
+        box-shadow: 0 15px 45px rgba(15, 23, 42, 0.08);
+      }
+      #user-settings-wrapper .setting-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 1rem;
+      }
+      #user-settings-wrapper .setting-header h4 {
+        margin: 0;
+      }
+      #user-settings-wrapper .setting-icon {
+        font-size: 1.5rem;
+        color: #4f46e5;
+      }
+      #user-settings-wrapper .change-password-form .form-group {
+        margin-bottom: 12px;
+      }
+      #user-settings-wrapper .change-password-form input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        background: #f8fafc;
+      }
+      #user-settings-wrapper .change-password-form button {
+        width: 100%;
+        margin-top: 10px;
+      }
+      #user-settings-wrapper .form-status {
+        display: none;
+        margin-top: 10px;
+        padding: 10px 14px;
+        border-radius: 8px;
+        font-size: 0.95rem;
+      }
+      #user-settings-wrapper .form-status.success {
+        display: block;
+        background: #ecfdf3;
+        color: #065f46;
+        border: 1px solid #6ee7b7;
+      }
+      #user-settings-wrapper .form-status.error {
+        display: block;
+        background: #fef2f2;
+        color: #b91c1c;
+        border: 1px solid #fecaca;
+      }
+    </style>
     <div id="dashboard-content" class="content-section active">
       <div class="stats-grid">
         <div class="stat-card">
@@ -162,6 +219,30 @@ export function createUserMainContent() {
           </button>
         </div>
       </div>
+      <div id="user-settings-wrapper">
+        <div class="setting-card">
+          <div class="setting-header">
+            <h4>Change Password</h4>
+            <span class="setting-icon">dY"?</span>
+          </div>
+          <form id="userChangePasswordForm" class="change-password-form">
+            <div class="form-group">
+              <label for="userCurrentPassword">Current Password</label>
+              <input type="password" id="userCurrentPassword" name="currentPassword" required placeholder="Enter current password">
+            </div>
+            <div class="form-group">
+              <label for="userNewPassword">New Password</label>
+              <input type="password" id="userNewPassword" name="newPassword" required placeholder="Enter new password" minlength="6">
+            </div>
+            <div class="form-group">
+              <label for="userConfirmPassword">Confirm New Password</label>
+              <input type="password" id="userConfirmPassword" name="confirmPassword" required placeholder="Confirm new password" minlength="6">
+            </div>
+            <div id="userChangePasswordStatus" class="form-status"></div>
+            <button type="submit" class="auth-btn">Update Password</button>
+          </form>
+        </div>
+      </div>
     </div>
   `;
 }
@@ -190,6 +271,7 @@ let userKIRProfileInstance = null;
 
 export function setupUserDashboardFeatures(user) {
   setupUserKIRProfileSection(user);
+  initializeUserChangePasswordForm();
 }
 
 function setupUserKIRProfileSection(user) {
@@ -246,4 +328,63 @@ function setupUserKIRProfileSection(user) {
   navItem.addEventListener('click', () => {
     setTimeout(() => initializeProfile(), 150);
   });
+}
+
+function initializeUserChangePasswordForm() {
+  const form = document.getElementById('userChangePasswordForm');
+  if (!form || form.dataset.listenerAttached === 'true') return;
+  form.dataset.listenerAttached = 'true';
+  const statusElement = document.getElementById('userChangePasswordStatus');
+  const submitBtn = form.querySelector('button[type="submit"]');
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    const currentPassword = form.querySelector('#userCurrentPassword')?.value.trim();
+    const newPassword = form.querySelector('#userNewPassword')?.value.trim();
+    const confirmPassword = form.querySelector('#userConfirmPassword')?.value.trim();
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setUserFormStatus(statusElement, 'Please fill in all fields.', 'error');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setUserFormStatus(statusElement, 'New passwords do not match.', 'error');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setUserFormStatus(statusElement, 'Password must be at least 6 characters.', 'error');
+      return;
+    }
+
+    try {
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Updating...';
+      }
+      setUserFormStatus(statusElement, 'Updating password...', '');
+      await FirebaseAuthService.changePasswordWithCurrentPassword(currentPassword, newPassword);
+      setUserFormStatus(statusElement, 'Password updated successfully.', 'success');
+      form.reset();
+    } catch (error) {
+      setUserFormStatus(statusElement, error.message || 'Unable to change password.', 'error');
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Update Password';
+      }
+    }
+  });
+}
+
+function setUserFormStatus(element, message, type = '') {
+  if (!element) return;
+  element.style.display = message ? 'block' : 'none';
+  element.textContent = message || '';
+  element.classList.remove('success', 'error');
+  if (type) {
+    element.classList.add(type);
+  }
 }

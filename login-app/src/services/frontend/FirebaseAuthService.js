@@ -9,7 +9,11 @@ import {
   signInWithPopup,
   GoogleAuthProvider,
   sendEmailVerification,
-  getAuth
+  sendPasswordResetEmail,
+  getAuth,
+  reauthenticateWithCredential,
+  EmailAuthProvider,
+  updatePassword
 } from 'firebase/auth';
 import { 
   doc, 
@@ -366,6 +370,53 @@ export class FirebaseAuthService {
     } catch (error) {
       console.error('Error deleting user:', error);
       throw new Error('Failed to delete user');
+    }
+  }
+
+  static async sendPasswordReset(email) {
+    if (!email) {
+      throw new Error('Email diperlukan.');
+    }
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch (error) {
+      console.error('Password reset error:', error);
+      if (error.code === 'auth/user-not-found') {
+        // Treat as success to avoid leaking valid emails
+        return;
+      }
+      if (error.code === 'auth/too-many-requests') {
+        throw new Error('Terlalu banyak percubaan. Cuba lagi sebentar lagi.');
+      }
+      throw new Error('Gagal menghantar pautan reset. Sila cuba lagi.');
+    }
+  }
+
+  static async changePasswordWithCurrentPassword(currentPassword, newPassword) {
+    if (!currentUser || !currentUser.email) {
+      throw new Error('Sesi pengguna tidak dijumpai. Sila log masuk semula.');
+    }
+    if (!currentPassword || !newPassword) {
+      throw new Error('Sila isi kata laluan semasa dan baharu.');
+    }
+    if (newPassword.length < 6) {
+      throw new Error('Kata laluan baharu mesti sekurang-kurangnya 6 aksara.');
+    }
+
+    try {
+      const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
+      await reauthenticateWithCredential(currentUser, credential);
+      await updatePassword(currentUser, newPassword);
+      return { success: true };
+    } catch (error) {
+      console.error('Change password error:', error);
+      if (error.code === 'auth/wrong-password') {
+        throw new Error('Kata laluan semasa tidak tepat.');
+      }
+      if (error.code === 'auth/too-many-requests') {
+        throw new Error('Terlalu banyak percubaan, sila cuba lagi kemudian.');
+      }
+      throw new Error(error.message || 'Gagal menukar kata laluan.');
     }
   }
 

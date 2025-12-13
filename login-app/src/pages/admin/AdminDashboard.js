@@ -268,6 +268,48 @@ export function createAdminMainContent() {
       max-width: 520px;
     }
     
+    .change-password-form .form-group {
+      margin-bottom: 12px;
+    }
+    
+    .change-password-form input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background: #f8fafc;
+    }
+    
+    .change-password-form button {
+      margin-top: 8px;
+    }
+    
+    .form-status {
+      display: none;
+      margin-top: 10px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.95rem;
+    }
+    
+    .form-status.success {
+      display: block;
+      background: #ecfdf3;
+      color: #065f46;
+      border: 1px solid #6ee7b7;
+    }
+    
+    .form-status.error {
+      display: block;
+      background: #fef2f2;
+      color: #b91c1c;
+      border: 1px solid #fecaca;
+    }
+    
+    .setting-card.full-width {
+      grid-column: 1 / -1;
+    }
+    
     .admin-add-user-step {
       margin-bottom: 20px;
       padding: 16px;
@@ -779,10 +821,10 @@ export function createAdminMainContent() {
               <div class="form-group">
                 <label for="no_perkeso">No. PERKESO</label>
                 <input type="text" id="no_perkeso" name="no_perkeso">
-              </div>
-            </div>
-            </div>
-          </div>
+        </div>
+      </div>
+    </div>
+  </div>
           
           <!-- Step 2: Maklumat Keluarga -->
           <div class="wizard-step" data-step="2">
@@ -1631,6 +1673,28 @@ export function createAdminMainContent() {
               <span>Auto-logout after inactivity</span>
             </label>
           </div>
+        </div>
+        <div class="setting-card full-width">
+          <div class="setting-header">
+            <h4>Change Password</h4>
+            <span class="setting-icon">dY"?</span>
+          </div>
+          <form id="adminChangePasswordForm" class="change-password-form">
+            <div class="form-group">
+              <label for="adminCurrentPassword">Current Password</label>
+              <input type="password" id="adminCurrentPassword" name="currentPassword" required placeholder="Enter current password">
+            </div>
+            <div class="form-group">
+              <label for="adminNewPassword">New Password</label>
+              <input type="password" id="adminNewPassword" name="newPassword" required placeholder="Enter new password" minlength="6">
+            </div>
+            <div class="form-group">
+              <label for="adminConfirmPassword">Confirm New Password</label>
+              <input type="password" id="adminConfirmPassword" name="confirmPassword" required placeholder="Confirm new password" minlength="6">
+            </div>
+            <div id="adminChangePasswordStatus" class="form-status"></div>
+            <button type="submit" class="btn btn-primary">Update Password</button>
+          </form>
         </div>
       </div>
     </div>
@@ -3928,11 +3992,77 @@ export function setupReportsListeners() {
 
 export function setupSettingsListeners() {
   const settingsNav = document.querySelector('[data-section="settings"]');
+  const ensureInitialized = () => {
+    setTimeout(() => initializeAdminPasswordForm(), 100);
+  };
   if (settingsNav) {
     settingsNav.addEventListener('click', () => {
       console.log('Settings section activated');
-      // Add settings initialization logic here
+      ensureInitialized();
     });
+  }
+  const settingsContent = document.getElementById('settings-content');
+  if (settingsContent && settingsContent.classList.contains('active')) {
+    ensureInitialized();
+  }
+}
+
+function initializeAdminPasswordForm() {
+  const form = document.getElementById('adminChangePasswordForm');
+  if (!form || form.dataset.listenerAttached === 'true') return;
+  form.dataset.listenerAttached = 'true';
+  const statusElement = document.getElementById('adminChangePasswordStatus');
+  const submitBtn = form.querySelector('button[type=\"submit\"]');
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    const currentPassword = form.querySelector('#adminCurrentPassword')?.value.trim();
+    const newPassword = form.querySelector('#adminNewPassword')?.value.trim();
+    const confirmPassword = form.querySelector('#adminConfirmPassword')?.value.trim();
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setFormStatusMessage(statusElement, 'Sila isi semua ruangan.', 'error');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setFormStatusMessage(statusElement, 'Kata laluan baharu tidak sepadan.', 'error');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setFormStatusMessage(statusElement, 'Kata laluan baharu mesti sekurang-kurangnya 6 aksara.', 'error');
+      return;
+    }
+
+    try {
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Updating...';
+      }
+      setFormStatusMessage(statusElement, 'Sedang mengemaskini kata laluan...', '');
+      await FirebaseAuthService.changePasswordWithCurrentPassword(currentPassword, newPassword);
+      setFormStatusMessage(statusElement, 'Kata laluan berjaya dikemas kini.', 'success');
+      form.reset();
+    } catch (error) {
+      setFormStatusMessage(statusElement, error.message || 'Gagal menukar kata laluan.', 'error');
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Update Password';
+      }
+    }
+  });
+}
+
+function setFormStatusMessage(element, message, type = '') {
+  if (!element) return;
+  element.style.display = message ? 'block' : 'none';
+  element.textContent = message || '';
+  element.classList.remove('success', 'error');
+  if (type) {
+    element.classList.add(type);
   }
 }
 

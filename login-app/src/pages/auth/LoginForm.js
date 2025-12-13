@@ -49,6 +49,12 @@ export function createLoginForm() {
             Continue with Google
           </button>
           
+          <div class="auth-links" style="text-align: center; margin-top: 0.75rem;">
+            <button type="button" id="forgotPasswordLink" style="background: none; border: none; color: #4f46e5; cursor: pointer; font-size: 0.95rem;">
+              Forgot your password?
+            </button>
+          </div>
+          
           <div id="login-error-message" class="error-message" style="display: none;"></div>
         </form>
         
@@ -73,6 +79,27 @@ export function createLoginForm() {
               </div>
             </button>
           </div>
+        </div>
+      </div>
+      
+      <div id="forgotPasswordModal" class="forgot-password-modal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(2px); z-index: 1000; align-items: center; justify-content: center;">
+        <div class="forgot-password-content" style="background: #fff; width: 90%; max-width: 420px; border-radius: 16px; padding: 24px; box-shadow: 0 20px 50px rgba(15,23,42,0.35);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="margin: 0; font-size: 1.25rem;">Reset Password</h3>
+            <button type="button" id="closeForgotPasswordModal" style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
+          </div>
+          <form id="forgotPasswordForm">
+            <p style="font-size: 0.95rem; color: #475569; margin-bottom: 1rem;">Enter your verified email address. We'll send you a reset link.</p>
+            <div class="form-group">
+              <label for="forgotPasswordEmail">Email Address</label>
+              <input type="email" id="forgotPasswordEmail" required placeholder="you@example.com">
+            </div>
+            <div id="forgotPasswordMessage" class="error-message" style="display: none;"></div>
+            <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem;">
+              <button type="button" class="auth-btn ghost" id="cancelForgotPassword" style="background: #e2e8f0; color: #1e293b;">Cancel</button>
+              <button type="submit" class="auth-btn" id="forgotPasswordSubmit">Send Reset Link</button>
+            </div>
+          </form>
         </div>
       </div>
     </div>
@@ -173,6 +200,97 @@ export function createRegistrationFormMarkup(options = {}) {
           <div id="${successMessageId}" class="success-message" style="display: none;"></div>
         </form>
   `;
+}
+
+export function setupForgotPasswordHandlers() {
+  const link = document.getElementById('forgotPasswordLink');
+  const modal = document.getElementById('forgotPasswordModal');
+  const closeBtn = document.getElementById('closeForgotPasswordModal');
+  const cancelBtn = document.getElementById('cancelForgotPassword');
+  const form = document.getElementById('forgotPasswordForm');
+  
+  if (!modal || !link || !form) return;
+  
+  const openModal = () => {
+    const emailInput = document.getElementById('forgotPasswordEmail');
+    const loginEmail = document.getElementById('loginEmail');
+    if (emailInput && loginEmail && !emailInput.value) {
+      emailInput.value = loginEmail.value;
+    }
+    showForgotPasswordMessage('', 'info', true);
+    modal.style.display = 'flex';
+  };
+  
+  const closeModal = () => {
+    modal.style.display = 'none';
+    const message = document.getElementById('forgotPasswordMessage');
+    if (message) message.style.display = 'none';
+  };
+  
+  link.addEventListener('click', openModal);
+  closeBtn?.addEventListener('click', closeModal);
+  cancelBtn?.addEventListener('click', closeModal);
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) {
+      closeModal();
+    }
+  });
+  
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const emailInput = document.getElementById('forgotPasswordEmail');
+    const submitBtn = document.getElementById('forgotPasswordSubmit');
+    const email = emailInput?.value.trim();
+    
+    if (!email) {
+      showForgotPasswordMessage('Please enter a valid email address.', 'error');
+      return;
+    }
+    
+    try {
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Sending...';
+      }
+      showForgotPasswordMessage('Sending reset link...', 'info');
+      
+      const { FirebaseAuthService } = await import('../../services/frontend/FirebaseAuthService.js');
+      await FirebaseAuthService.sendPasswordReset(email);
+      
+      showForgotPasswordMessage('If an account exists for this email, a reset link has been sent.', 'success');
+      setTimeout(() => {
+        closeModal();
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Send Reset Link';
+        }
+      }, 2000);
+    } catch (error) {
+      console.error('Forgot password error:', error);
+      showForgotPasswordMessage(error.message || 'Unable to send reset email. Please try again later.', 'error');
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Send Reset Link';
+      }
+    }
+  });
+}
+
+function showForgotPasswordMessage(message, type = 'info', hide = false) {
+  const messageElement = document.getElementById('forgotPasswordMessage');
+  if (!messageElement) return;
+  
+  if (hide || !message) {
+    messageElement.style.display = 'none';
+    messageElement.textContent = '';
+    return;
+  }
+  
+  messageElement.textContent = message;
+  messageElement.style.display = 'block';
+  messageElement.style.background = type === 'success' ? '#ecfdf3' : type === 'info' ? '#eef2ff' : '#fee2e2';
+  messageElement.style.color = type === 'success' ? '#065f46' : type === 'info' ? '#3730a3' : '#b91c1c';
+  messageElement.style.border = type === 'success' ? '1px solid #6ee7b7' : type === 'info' ? '1px solid #c7d2fe' : '1px solid #fecaca';
 }
 
 // Handle authentication mode toggle (login/register)
