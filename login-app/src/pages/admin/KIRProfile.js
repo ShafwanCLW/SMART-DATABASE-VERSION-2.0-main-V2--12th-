@@ -68,6 +68,9 @@ export class KIRProfile {
     this.customBackHandler = null;
     this.hideAdminActions = false;
     this.disableURLSync = false;
+    this.beforeUnloadHandler = null;
+    this.currentHash = window.location.hash || '';
+    this.isHandlingPopstate = false;
   }
 
   applyOptions(options = {}) {
@@ -167,7 +170,9 @@ export class KIRProfile {
     }
     
     const url = `/admin/kir/${this.kirId}?tab=${this.currentTab}`;
-    window.history.replaceState(null, '', `#${url}`);
+    const hash = `#${url}`;
+    window.history.replaceState(null, '', hash);
+    this.currentHash = hash;
   }
 
   // Load KIR data from service
@@ -1988,6 +1993,18 @@ export class KIRProfile {
         this.validateField(e.target);
       }
     });
+
+    // Warn before leaving the page if there are unsaved changes
+    if (this.beforeUnloadHandler) {
+      window.removeEventListener('beforeunload', this.beforeUnloadHandler);
+    }
+    this.beforeUnloadHandler = (event) => {
+      if (this.hasUnsavedChanges()) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', this.beforeUnloadHandler);
     
     // Setup event listeners for extracted tab components
     this.setupTabComponentEventListeners();
@@ -2039,6 +2056,36 @@ export class KIRProfile {
     this.updateTabNavigation();
   }
 
+  // Check for unsaved changes across different scopes
+  hasUnsavedChanges(options = {}) {
+    const { scope, tabId, drawerTabId, pkirSection, kesihatanSection } = options;
+    
+    switch (scope) {
+      case 'tab':
+        return tabId ? this.dirtyTabs.has(tabId) : this.dirtyTabs.size > 0;
+      case 'drawer':
+        return drawerTabId ? this.drawerDirtyTabs.has(drawerTabId) : this.drawerDirtyTabs.size > 0;
+      case 'pkir':
+        return pkirSection ? this.pkirDirtyTabs.has(pkirSection) : this.pkirDirtyTabs.size > 0;
+      case 'kesihatan':
+        return kesihatanSection ? this.kesihatanDirtyTabs.has(kesihatanSection) : this.kesihatanDirtyTabs.size > 0;
+      default:
+        return (
+          this.dirtyTabs.size > 0 ||
+          this.drawerDirtyTabs.size > 0 ||
+          this.pkirDirtyTabs.size > 0 ||
+          this.kesihatanDirtyTabs.size > 0
+        );
+    }
+  }
+
+  clearAllDirtyStates() {
+    this.dirtyTabs.clear();
+    this.drawerDirtyTabs.clear();
+    this.pkirDirtyTabs.clear();
+    this.kesihatanDirtyTabs.clear();
+  }
+
   // Update sidebar navigation to show dirty indicators and active states
   updateSidebarNavigation() {
     const sidebarNav = document.querySelector('.sidebar-navigation');
@@ -2080,8 +2127,13 @@ export class KIRProfile {
     
     // Check for unsaved changes
     if (this.dirtyTabs.has(this.currentTab)) {
-      const confirmed = await this.confirmUnsavedChanges();
+      const confirmed = await this.confirmUnsavedChanges({
+        scope: 'tab',
+        tabId: this.currentTab,
+        message: 'Perubahan pada tab ini belum disimpan. Teruskan tanpa menyimpan?'
+      });
       if (!confirmed) return;
+      this.clearTabDirty(this.currentTab);
     }
     
     this.currentTab = tabId;
@@ -2128,10 +2180,13 @@ export class KIRProfile {
   }
 
   // Removed confirm dialog for unsaved changes
-  confirmUnsavedChanges() {
-    return new Promise((resolve) => {
-      resolve(true); // Always allow navigation without popup
-    });
+  async confirmUnsavedChanges(options = {}) {
+    if (!this.hasUnsavedChanges(options)) {
+      return true;
+    }
+    
+    const message = options.message || 'Perubahan anda belum disimpan. Klik "OK" untuk teruskan tanpa menyimpan atau "Cancel" untuk kekal dan simpan.';
+    return window.confirm(message);
   }
 
   // Save tab data
@@ -2439,7 +2494,22 @@ export class KIRProfile {
   }
   
   // Go back to KIR list
-  goBack() {
+  async goBack() {
+    if (this.hasUnsavedChanges()) {
+      const confirmed = await this.confirmUnsavedChanges({
+        message: 'Perubahan pada profil ini belum disimpan. Kembali ke Senarai KIR tanpa menyimpan?'
+      });
+      if (!confirmed) {
+        return;
+      }
+      this.clearAllDirtyStates();
+    }
+
+    if (this.beforeUnloadHandler) {
+      window.removeEventListener('beforeunload', this.beforeUnloadHandler);
+      this.beforeUnloadHandler = null;
+    }
+
     if (typeof this.customBackHandler === 'function') {
       this.customBackHandler();
       return;
@@ -2722,9 +2792,17 @@ export class KIRProfile {
     this.render();
   }
 
-  closeAIRDrawer() {
-    // Removed confirm dialog - always allow closing
-    
+  async closeAIRDrawer() {
+    if (this.drawerDirtyTabs.size > 0) {
+      const confirmed = await this.confirmUnsavedChanges({
+        scope: 'drawer',
+        message: 'Perubahan dalam borang AIR belum disimpan. Tutup tanpa menyimpan?'
+      });
+      if (!confirmed) {
+        return;
+      }
+    }
+
     this.isDrawerOpen = false;
     this.currentAIR = null;
     this.currentDrawerTab = 'maklumat-asas';
@@ -2736,7 +2814,19 @@ export class KIRProfile {
     });
   }
 
-  switchDrawerTab(tabId) {
+  async switchDrawerTab(tabId) {
+    if (this.drawerDirtyTabs.has(this.currentDrawerTab)) {
+      const confirmed = await this.confirmUnsavedChanges({
+        scope: 'drawer',
+        drawerTabId: this.currentDrawerTab,
+        message: 'Perubahan dalam tab AIR ini belum disimpan. Teruskan tanpa menyimpan?'
+      });
+      if (!confirmed) {
+        return;
+      }
+      this.drawerDirtyTabs.delete(this.currentDrawerTab);
+    }
+
     this.currentDrawerTab = tabId;
     this.render();
   }
@@ -3082,9 +3172,19 @@ export class KIRProfile {
   }
 
   // PKIR Methods
-  switchPKIRSection(section) {
-    // Removed confirm dialog - always allow section switching
-    
+  async switchPKIRSection(section) {
+    if (this.pkirDirtyTabs.has(this.currentPKIRSection)) {
+      const confirmed = await this.confirmUnsavedChanges({
+        scope: 'pkir',
+        pkirSection: this.currentPKIRSection,
+        message: 'Perubahan pada seksyen PKIR ini belum disimpan. Teruskan tanpa menyimpan?'
+      });
+      if (!confirmed) {
+        return;
+      }
+      this.pkirDirtyTabs.delete(this.currentPKIRSection);
+    }
+
     this.currentPKIRSection = section;
     this.render();
   }
@@ -3331,8 +3431,13 @@ export class KIRProfile {
     
     // Check for unsaved changes
     if (this.kesihatanDirtyTabs.has(this.currentKesihatanSection)) {
-      const confirmed = await this.confirmUnsavedChanges();
+      const confirmed = await this.confirmUnsavedChanges({
+        scope: 'kesihatan',
+        kesihatanSection: this.currentKesihatanSection,
+        message: 'Perubahan pada seksyen Kesihatan belum disimpan. Teruskan tanpa menyimpan?'
+      });
       if (!confirmed) return;
+      this.kesihatanDirtyTabs.delete(this.currentKesihatanSection);
     }
     
     this.currentKesihatanSection = sectionId;
