@@ -1,7 +1,7 @@
 // Main application controller
 import { createLoginForm, handleTabSwitch, handleDemoLogin, showError, handleAuthToggle, handleRegistration, showRegistrationSuccess, showRegistrationError, handleGoogleSignIn } from './pages/auth/LoginForm.js';
 import { createAdminDashboard, setupUserManagementListeners, setupKIRManagementListeners, setupCiptaKIRListeners, setupProgramKehadiranListeners, setupProgramKehadiranNewListeners, setupProgramKehadiranNewestListeners, setupSenariKIRListeners, setupReportsListeners, setupSettingsListeners, setupFinancialTrackingListeners, setupFinancialTrackingNewestListeners } from './pages/admin/AdminDashboard.js';
-import { createUserDashboard } from './pages/user/UserDashboard.js';
+import { createUserDashboard, setupUserDashboardFeatures } from './pages/user/UserDashboard.js';
 import { FirebaseAuthService, handleFirebaseLogin, handleFirebaseLogout } from './services/frontend/FirebaseAuthService.js';
 import { AuthService, handleLogin, handleLogout } from './services/frontend/AuthService.js'; // Keep for demo functionality
 import { saveUserSession, loadUserSession, clearUserSession } from './lib/SessionUtils.js';
@@ -299,6 +299,7 @@ export class App {
       setupSettingsListeners();
     } else {
       this.appElement.innerHTML = createUserDashboard(userData);
+      setupUserDashboardFeatures(userData);
     }
 
     // Setup navigation listeners

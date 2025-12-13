@@ -60,6 +60,41 @@ export class KIRProfile {
     this.currentKesihatanSection = 'ringkasan';
     this.kesihatanDirtyTabs = new Set();
     this.validKesihatanSections = ['ringkasan', 'ubat-tetap', 'rawatan', 'pembedahan'];
+    
+    // Embedding / context configuration
+    this.containerId = 'kir-profile-container';
+    this.mode = 'admin';
+    this.allowNavigation = true;
+    this.customBackHandler = null;
+    this.hideAdminActions = false;
+    this.disableURLSync = false;
+  }
+
+  applyOptions(options = {}) {
+    if (!options) return;
+    if (options.containerId) this.containerId = options.containerId;
+    if (options.mode) this.mode = options.mode;
+    if (options.allowNavigation !== undefined) this.allowNavigation = options.allowNavigation;
+    if (options.onBack) this.customBackHandler = options.onBack;
+    if (options.hideAdminActions !== undefined) this.hideAdminActions = options.hideAdminActions;
+    if (options.disableURLSync !== undefined) this.disableURLSync = options.disableURLSync;
+  }
+
+  getContainer() {
+    const targetId = this.containerId || 'kir-profile-container';
+    return document.getElementById(targetId);
+  }
+
+  showSelfServiceError(message = 'Profil KIR tidak dapat diakses.') {
+    const container = this.getContainer();
+    if (container) {
+      container.innerHTML = `
+        <div class="kir-profile-empty-state">
+          <h3>${message}</h3>
+          <p>Sila hubungi pentadbir untuk bantuan lanjut.</p>
+        </div>
+      `;
+    }
   }
 
   // Initialize tab components
@@ -80,14 +115,25 @@ export class KIRProfile {
   }
 
   // Initialize KIR Profile with kirId and optional tab
-  async init(kirId, tab = 'maklumat-asas') {
+  async init(kirId, tab = 'maklumat-asas', options = {}) {
+    if (typeof tab === 'object') {
+      options = tab;
+      tab = options.tab || 'maklumat-asas';
+    }
+    
+    this.applyOptions(options);
+    
     // Validate kirId
     if (!kirId || kirId === 'null' || kirId === 'undefined' || kirId.trim() === '') {
       console.error('Invalid KIR ID provided:', kirId);
-      this.showToast('KIR ID tidak sah. Mengalihkan ke dashboard admin.', 'error');
-      setTimeout(() => {
-        window.location.hash = '#/admin';
-      }, 2000);
+      if (this.mode === 'self-service') {
+        this.showSelfServiceError('KIR tidak ditemui untuk akaun ini.');
+      } else {
+        this.showToast('KIR ID tidak sah. Mengalihkan ke dashboard admin.', 'error');
+        setTimeout(() => {
+          window.location.hash = '#/admin';
+        }, 2000);
+      }
       return;
     }
     
@@ -98,7 +144,9 @@ export class KIRProfile {
     this.initializeTabComponents();
     
     // Update URL without reload
-    this.updateURL();
+    if (!this.disableURLSync) {
+      this.updateURL();
+    }
     
     // Load KIR data
     await this.loadKIRData();
@@ -215,7 +263,7 @@ export class KIRProfile {
 
   // Show loading skeleton
   showLoadingState() {
-    const container = document.getElementById('kir-profile-container');
+    const container = this.getContainer();
     if (container) {
       container.innerHTML = this.createLoadingSkeleton();
     }
@@ -223,7 +271,7 @@ export class KIRProfile {
 
   // Show not found state
   showNotFoundState() {
-    const container = document.getElementById('kir-profile-container');
+    const container = this.getContainer();
     if (container) {
       container.innerHTML = this.createNotFoundState();
     }
@@ -231,7 +279,7 @@ export class KIRProfile {
 
   // Show error state
   showErrorState(error) {
-    const container = document.getElementById('kir-profile-container');
+    const container = this.getContainer();
     if (container) {
       const message = error.code === 'permission-denied' || error.message?.includes('permission-denied')
         ? 'Akses ditolak: sila semak peranan dan peraturan pangkalan data.'
@@ -244,7 +292,7 @@ export class KIRProfile {
   render() {
     if (!this.kirData) return;
     
-    const container = document.getElementById('kir-profile-container');
+    const container = this.getContainer();
     if (container) {
       container.innerHTML = this.createKIRProfileHTML();
       
@@ -332,16 +380,19 @@ export class KIRProfile {
     const completeness = this.calculateCompleteness();
     const statusChip = this.getStatusChip(this.kirData?.status_rekod);
     const initials = this.getInitials(this.kirData?.nama_penuh);
+    const showBackButton = this.allowNavigation !== false && (this.mode === 'admin' || typeof this.customBackHandler === 'function');
+    const backButtonHTML = showBackButton ? `
+          <button class="back-btn-modern" onclick="kirProfile.goBack()">
+            <i class="fas fa-arrow-left"></i>
+            <span>${this.mode === 'self-service' ? 'Kembali ke Dashboard' : 'Kembali ke Senarai KIR'}</span>
+          </button>` : '';
     
     return `
       <div class="kir-profile-header-modern">
         <div class="header-background-pattern"></div>
         
         <div class="header-top-modern">
-          <button class="back-btn-modern" onclick="kirProfile.goBack()">
-            <i class="fas fa-arrow-left"></i>
-            <span>Kembali ke Senarai KIR</span>
-          </button>
+          ${backButtonHTML}
           
           <div class="header-meta">
             <span class="last-updated">
@@ -418,7 +469,7 @@ export class KIRProfile {
           </div>
           
           <div class="header-actions-modern">
-            ${this.createStatusActions()}
+            ${this.hideAdminActions ? '' : this.createStatusActions()}
           </div>
         </div>
       </div>
@@ -427,6 +478,9 @@ export class KIRProfile {
 
   // Create status action buttons
   createStatusActions() {
+    if (this.hideAdminActions) {
+      return '';
+    }
     const currentStatus = this.kirData?.status_rekod;
     let actions = [];
     
@@ -2386,7 +2440,14 @@ export class KIRProfile {
   
   // Go back to KIR list
   goBack() {
-    // Removed confirm dialog - always allow navigation
+    if (typeof this.customBackHandler === 'function') {
+      this.customBackHandler();
+      return;
+    }
+    
+    if (this.mode !== 'admin') {
+      return;
+    }
     
     // Navigate back to Senarai KIR section in admin dashboard
     window.location.hash = '#/admin';

@@ -1,3 +1,5 @@
+import { KIRProfile } from '../admin/KIRProfile.js';
+
 // User dashboard component
 export function createUserSidebar(user) {
   return `
@@ -21,6 +23,10 @@ export function createUserSidebar(user) {
           My Profile
         </a>
         <a href="#" class="nav-item" data-section="activity">
+        <a href="#" class="nav-item" data-section="kir-profile"
+          <span class="nav-icon">dY"<</span>
+          My KIR Profile
+        </a>
           <span class="nav-icon">📋</span>
           My Activity
         </a>
@@ -79,6 +85,18 @@ export function createUserMainContent() {
             <span>⚙️</span>
             Settings
           </button>
+        </div>
+      </div>
+    </div>
+    
+    <div id="kir-profile-content" class="content-section">
+      <div class="quick-actions">
+        <h3 class="section-title">My Household (KIR)</h3>
+        <p style="color: #64748b; margin-bottom: 1.5rem;">Kemaskini maklumat keluarga anda. Semua perubahan akan dikongsi dengan pentadbir.</p>
+      </div>
+      <div id="user-kir-profile-container" class="kir-profile-embed">
+        <div class="empty-state">
+          <p>Pilih tab ini untuk memuatkan profil KIR anda.</p>
         </div>
       </div>
     </div>
@@ -166,4 +184,66 @@ export function createUserDashboard(user) {
       </main>
     </div>
   `;
+}
+
+let userKIRProfileInstance = null;
+
+export function setupUserDashboardFeatures(user) {
+  setupUserKIRProfileSection(user);
+}
+
+function setupUserKIRProfileSection(user) {
+  const navItem = document.querySelector('[data-section="kir-profile"]');
+  const container = document.getElementById('user-kir-profile-container');
+  
+  if (!navItem || !container) return;
+  
+  if (!user?.kir_id) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <h3>Rekod KIR belum dipautkan</h3>
+        <p>Sila hubungi pentadbir untuk memautkan akaun anda kepada rekod KIR.</p>
+      </div>
+    `;
+    return;
+  }
+  
+  let isInitialized = false;
+  
+  const initializeProfile = async () => {
+    if (isInitialized) return;
+    isInitialized = true;
+    
+    container.innerHTML = `
+      <div class="loading-text">Memuatkan profil KIR anda...</div>
+    `;
+    
+    if (!userKIRProfileInstance) {
+      userKIRProfileInstance = new KIRProfile();
+    }
+    
+    window.kirProfile = userKIRProfileInstance;
+    
+    try {
+      await userKIRProfileInstance.init(user.kir_id, 'maklumat-asas', {
+        mode: 'self-service',
+        containerId: 'user-kir-profile-container',
+        allowNavigation: false,
+        hideAdminActions: true,
+        disableURLSync: true
+      });
+    } catch (error) {
+      console.error('Failed to initialize user KIR profile:', error);
+      container.innerHTML = `
+        <div class="empty-state">
+          <h3>Ralat memuatkan profil</h3>
+          <p>${error.message || 'Sila cuba lagi atau hubungi pentadbir.'}</p>
+        </div>
+      `;
+    }
+  };
+  
+  navItem.addEventListener('click', () => {
+    setTimeout(() => initializeProfile(), 150);
+  });
 }

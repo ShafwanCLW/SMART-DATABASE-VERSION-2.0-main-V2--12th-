@@ -5,6 +5,18 @@ import { normalizeNoKP } from '../../services/database/collections.js';
 import { KIRService } from '../../services/backend/KIRService.js';
 
 let currentAddUserContext = null;
+let currentEditingUser = null;
+let cachedUserList = [];
+let userManagementToastTimer = null;
+
+function formatDisplayNoKP(noKp) {
+  if (!noKp) return '-';
+  const digits = noKp.replace(/\D/g, '');
+  if (digits.length === 12) {
+    return `${digits.slice(0, 6)}-${digits.slice(6, 8)}-${digits.slice(8)}`;
+  }
+  return noKp;
+}
 // Note: Firebase functions are dynamically imported in the code
 
 // Admin dashboard creation functions
@@ -219,6 +231,41 @@ export function createAdminMainContent() {
     
     .quick-kir-modal .modal-content {
       max-width: 420px;
+    }
+    
+    .user-management-toast {
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      display: none;
+      font-size: 0.95rem;
+      border: 1px solid transparent;
+    }
+    
+    .user-management-toast.info {
+      display: block;
+      background: #eef2ff;
+      color: #4338ca;
+      border-color: #c7d2fe;
+    }
+    
+    .user-management-toast.success {
+      display: block;
+      background: #ecfdf3;
+      color: #065f46;
+      border-color: #6ee7b7;
+    }
+    
+    .user-management-toast.error {
+      display: block;
+      background: #fef2f2;
+      color: #b91c1c;
+      border-color: #fecaca;
+    }
+    
+    .edit-user-modal .modal-content,
+    .view-user-modal .modal-content {
+      max-width: 520px;
     }
     
     .admin-add-user-step {
@@ -2181,8 +2228,11 @@ export async function initializeUserManagement() {
       email: user.email || 'No email',
       role: user.role || 'user',
       status: user.status || 'active',
-      lastLogin: user.lastLogin ? formatLastLogin(user.lastLogin) : 'Never'
+      lastLogin: user.lastLogin ? formatLastLogin(user.lastLogin) : 'Never',
+      noKp: user.no_kp || user.noKp || '',
+      noKpDisplay: user.no_kp_display || user.no_kp || user.noKpDisplay || ''
     }));
+    cachedUserList = users;
   } catch (error) {
     console.error('Error loading users:', error);
     // Fallback to mock data if Firebase fails
@@ -2194,6 +2244,7 @@ export async function initializeUserManagement() {
       { id: 5, name: 'Mike Wilson', email: 'mike.wilson@example.com', role: 'user', status: 'active', lastLogin: '3 days ago' }
     ];
     showUserManagementError('Failed to load users from database. Showing sample data.');
+    cachedUserList = users;
   }
 
   // Helper function to format last login date
@@ -2243,9 +2294,9 @@ export async function initializeUserManagement() {
         <td class="last-login">${user.lastLogin}</td>
         <td>
           <div class="action-menu">
-            <button class="action-menu-btn" title="Edit User">✏️</button>
-            <button class="action-menu-btn" title="View Details">👁️</button>
-            <button class="action-menu-btn danger" title="Delete User">🗑️</button>
+            <button class="action-menu-btn" title="Edit User" data-action="edit" data-id="${user.id}">Edit</button>
+            <button class="action-menu-btn" title="View Details" data-action="view" data-id="${user.id}">View</button>
+            <button class="action-menu-btn danger" title="Delete User" data-action="delete" data-id="${user.id}">Delete</button>
           </div>
         </td>
       </tr>
@@ -2257,6 +2308,8 @@ export async function initializeUserManagement() {
       const total = filteredUsers.length;
       tableInfo.innerHTML = `<span>Showing <strong>${total}</strong> of <strong>${users.length}</strong> users</span>`;
     }
+    
+    attachUserActionListeners();
   }
   
   function filterUsers() {
@@ -2454,6 +2507,60 @@ function setAddUserStatus(message, type = 'info') {
     statusElement.style.color = '#4338ca';
     statusElement.style.border = '1px solid #c7d2fe';
   }
+}
+
+function attachUserActionListeners() {
+  const buttons = document.querySelectorAll('#usersTableBody .action-menu-btn');
+  buttons.forEach(button => {
+    button.addEventListener('click', (event) => {
+      const action = event.currentTarget.dataset.action;
+      const userId = event.currentTarget.dataset.id;
+      if (!action || !userId) return;
+      const user = cachedUserList.find(u => String(u.id) === String(userId));
+      if (!user) {
+        showUserManagementToast('Pengguna tidak ditemui.', 'error');
+        return;
+      }
+      handleUserRowAction(action, user);
+    });
+  });
+}
+
+function handleUserRowAction(action, user) {
+  if (!action || !user) return;
+  if (action === 'edit') {
+    openEditUserModal(user);
+  } else if (action === 'view') {
+    openUserDetailsModal(user);
+  } else if (action === 'delete') {
+    handleDeleteUser(user);
+  }
+}
+
+function showUserManagementToast(message, type = 'info') {
+  const container = document.getElementById('user-management-content');
+  if (!container) return;
+  
+  let toast = container.querySelector('.user-management-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.className = 'user-management-toast';
+    container.insertBefore(toast, container.firstChild);
+  }
+  
+  toast.textContent = message;
+  toast.className = `user-management-toast ${type}`;
+  toast.style.display = 'block';
+  
+  if (userManagementToastTimer) {
+    clearTimeout(userManagementToastTimer);
+  }
+  
+  userManagementToastTimer = setTimeout(() => {
+    if (toast) {
+      toast.style.display = 'none';
+    }
+  }, 4000);
 }
 
 async function handleAdminNoKPCheck(event) {
@@ -2761,6 +2868,218 @@ function getQuickKIRModalTemplate(prefillName, prefillNoKP) {
       </div>
     </div>
   `;
+}
+
+function openEditUserModal(user) {
+  closeEditUserModal();
+  currentEditingUser = user;
+  
+  const modal = document.createElement('div');
+  modal.className = 'modal edit-user-modal';
+  modal.id = 'edit-user-modal';
+  modal.innerHTML = getEditUserModalTemplate(user);
+  document.body.appendChild(modal);
+  modal.style.display = 'flex';
+  
+  const closeBtn = modal.querySelector('#close-edit-user-modal');
+  if (closeBtn) closeBtn.addEventListener('click', closeEditUserModal);
+  
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) {
+      closeEditUserModal();
+    }
+  });
+  
+  const form = modal.querySelector('#editUserForm');
+  if (form) {
+    form.addEventListener('submit', handleEditUserSubmit);
+  }
+  
+  const cancelBtn = modal.querySelector('#cancel-edit-user');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', closeEditUserModal);
+  }
+}
+
+function closeEditUserModal() {
+  const modal = document.getElementById('edit-user-modal');
+  if (modal) {
+    modal.remove();
+  }
+  currentEditingUser = null;
+}
+
+function getEditUserModalTemplate(user) {
+  const statusOptions = ['active', 'pending', 'inactive', 'pending_verification'];
+  const roleOptions = ['user', 'admin'];
+  const formattedNoKP = formatDisplayNoKP(user?.noKpDisplay || user?.noKp || '');
+  
+  return `
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Kemaskini Pengguna</h2>
+        <span class="close-modal" id="close-edit-user-modal">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div id="edit-user-status" class="admin-add-user-status"></div>
+        <form id="editUserForm" class="modal-form">
+          <div class="form-group">
+            <label>No. Kad Pengenalan</label>
+            <input type="text" value="${formattedNoKP}" readonly>
+          </div>
+          <div class="form-group">
+            <label for="editUserName">Nama</label>
+            <input type="text" id="editUserName" name="name" required value="${user.name || ''}">
+          </div>
+          <div class="form-group">
+            <label for="editUserEmail">Email</label>
+            <input type="email" id="editUserEmail" value="${user.email || ''}" readonly>
+          </div>
+          <div class="form-group">
+            <label for="editUserRole">Role</label>
+            <select id="editUserRole" name="role" required>
+              ${roleOptions.map(role => `<option value="${role}" ${user.role === role ? 'selected' : ''}>${role.charAt(0).toUpperCase() + role.slice(1)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="editUserStatus">Status</label>
+            <select id="editUserStatus" name="status" required>
+              ${statusOptions.map(status => `<option value="${status}" ${user.status === status ? 'selected' : ''}>${status.charAt(0).toUpperCase() + status.slice(1)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" id="cancel-edit-user">Batal</button>
+            <button type="submit" class="btn btn-primary" id="edit-user-submit">Simpan Perubahan</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+function setEditUserStatus(message, type = 'info') {
+  const statusElement = document.getElementById('edit-user-status');
+  if (!statusElement) return;
+  statusElement.textContent = message;
+  statusElement.style.display = 'block';
+  statusElement.className = 'admin-add-user-status';
+  if (type === 'success') {
+    statusElement.classList.add('success');
+  } else if (type === 'error') {
+    statusElement.classList.add('error');
+  }
+}
+
+async function handleEditUserSubmit(event) {
+  event.preventDefault();
+  if (!currentEditingUser) return;
+  
+  const form = event.target;
+  const submitButton = form.querySelector('#edit-user-submit');
+  const formData = new FormData(form);
+  const name = (formData.get('name') || '').trim();
+  const role = formData.get('role');
+  const status = formData.get('status');
+  
+  if (!name) {
+    setEditUserStatus('Nama diperlukan.', 'error');
+    return;
+  }
+  
+  try {
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.textContent = 'Menyimpan...';
+    }
+    setEditUserStatus('Mengemas kini pengguna...', 'info');
+    
+    await FirebaseAuthService.updateUser(currentEditingUser.id, {
+      name,
+      role,
+      status
+    });
+    
+    showUserManagementToast('Maklumat pengguna berjaya dikemaskini.', 'success');
+    closeEditUserModal();
+    await initializeUserManagement();
+  } catch (error) {
+    console.error('Error updating user:', error);
+    setEditUserStatus(error.message || 'Gagal mengemas kini pengguna.', 'error');
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = 'Simpan Perubahan';
+    }
+  }
+}
+
+function openUserDetailsModal(user) {
+  closeUserDetailsModal();
+  const modal = document.createElement('div');
+  modal.className = 'modal view-user-modal';
+  modal.id = 'view-user-modal';
+  modal.innerHTML = getUserDetailsModalTemplate(user);
+  document.body.appendChild(modal);
+  modal.style.display = 'flex';
+  
+  const closeBtn = modal.querySelector('#close-view-user-modal');
+  if (closeBtn) closeBtn.addEventListener('click', closeUserDetailsModal);
+  const closePrimary = modal.querySelector('#close-view-user-btn');
+  if (closePrimary) closePrimary.addEventListener('click', closeUserDetailsModal);
+  
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) {
+      closeUserDetailsModal();
+    }
+  });
+}
+
+function closeUserDetailsModal() {
+  const modal = document.getElementById('view-user-modal');
+  if (modal) {
+    modal.remove();
+  }
+}
+
+function getUserDetailsModalTemplate(user) {
+  const formattedNoKP = formatDisplayNoKP(user?.noKpDisplay || user?.noKp || '');
+  return `
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Maklumat Pengguna</h2>
+        <span class="close-modal" id="close-view-user-modal">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div class="user-details-grid">
+          <p><strong>Nama:</strong> ${user.name || '-'}</p>
+          <p><strong>Email:</strong> ${user.email || '-'}</p>
+          <p><strong>No. Kad Pengenalan:</strong> ${formattedNoKP}</p>
+          <p><strong>Role:</strong> ${user.role || '-'}</p>
+          <p><strong>Status:</strong> ${user.status || '-'}</p>
+          <p><strong>Last Login:</strong> ${user.lastLogin || '-'}</p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="close-view-user-btn">Tutup</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function handleDeleteUser(user) {
+  if (!user) return;
+  const confirmed = confirm(`Adakah anda pasti ingin memadam pengguna ${user.name}? Tindakan ini tidak boleh dibatalkan.`);
+  if (!confirmed) return;
+  
+  try {
+    showUserManagementToast('Memadam pengguna...', 'info');
+    await FirebaseAuthService.deleteUser(user.id);
+    showUserManagementToast('Pengguna berjaya dipadam.', 'success');
+    await initializeUserManagement();
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    showUserManagementToast(error.message || 'Gagal memadam pengguna.', 'error');
+  }
 }
 
 // KIR Management functionality
