@@ -3,6 +3,7 @@ import { KIRService } from '../../services/backend/KIRService.js';
 import { AIRService } from '../../services/backend/AIRService.js';
 import { PasanganService } from '../../services/backend/PasanganService.js';
 import { ProgramService } from '../../services/backend/ProgramService.js';
+import { DokumenService } from '../../services/backend/DokumenService.js';
 
 // Import extracted tab components
 import { KAFATab, PendidikanTab, PekerjaanTab } from './KIRProfile/components/tabs/index.js';
@@ -14,7 +15,7 @@ import { BantuanBulananTab } from './KIRProfile/components/tabs/BantuanBulananTa
 import { AIRTab } from './KIRProfile/components/tabs/AIRTab.js';
 import { PKIRTab } from './KIRProfile/components/tabs/PKIRTab.js';
 import { ProgramTab } from './KIRProfile/components/tabs/ProgramTab.js';
-import { deriveBirthInfoFromIC } from './KIRProfile/components/shared/icUtils.js';
+import { deriveBirthInfoFromIC, formatICWithDashes } from './KIRProfile/components/shared/icUtils.js';
 
 export class KIRProfile {
   constructor() {
@@ -587,7 +588,25 @@ export class KIRProfile {
             
             <div class="form-group">
               <label for="no_kp">No. KP</label>
-              <input type="text" id="no_kp" name="no_kp" value="${data.no_kp || ''}" readonly>
+              <input type="text" id="no_kp" name="no_kp" value="${this.formatNoKP(data.no_kp, { fallback: '' })}" readonly>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group document-upload-group">
+              <label for="sijil_lahir_file">Sijil Lahir (PDF/JPG/PNG)</label>
+              <input type="file" id="sijil_lahir_file" name="sijil_lahir_file" accept=".pdf,image/*" onchange="kirProfile.handleDocumentFileChange('sijil_lahir', this)">
+              ${this.renderDocumentPreview('sijil_lahir')}
+              <input type="hidden" id="sijil_lahir_remove" name="sijil_lahir_remove" value="false">
+              <small class="form-help">Muat naik salinan sijil lahir yang sah.</small>
+            </div>
+            
+            <div class="form-group document-upload-group">
+              <label for="ic_document_file">Kad Pengenalan (Depan/Belakang)</label>
+              <input type="file" id="ic_document_file" name="ic_document_file" accept=".pdf,image/*" onchange="kirProfile.handleDocumentFileChange('ic_document', this)">
+              ${this.renderDocumentPreview('ic_document')}
+              <input type="hidden" id="ic_document_remove" name="ic_document_remove" value="false">
+              <small class="form-help">PDF, JPG atau PNG sehingga 10MB.</small>
             </div>
           </div>
           
@@ -734,6 +753,108 @@ export class KIRProfile {
         </div>
       </form>
     `;
+  }
+
+  renderDocumentPreview(docKey) {
+    return `
+      <div class="document-preview" data-doc="${docKey}">
+        ${this.buildDocumentPreviewInner(docKey)}
+      </div>
+    `;
+  }
+
+  buildDocumentPreviewInner(docKey, state = this.getDocumentState(docKey)) {
+    const url = state?.url || '';
+    const label = state?.label || this.getDocumentLabel(docKey);
+    const displayName = state?.name || label;
+    const safeLabel = this.escapeHtml(label);
+    const safeName = this.escapeHtml(displayName || label);
+    const safeUrl = this.escapeHtml(url);
+    
+    if (url) {
+      return `
+        <div class="document-actions">
+          <a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeName || safeLabel}</a>
+          <button type="button" class="btn btn-link text-danger" onclick="kirProfile.markDocumentForRemoval('${docKey}')">Padam Dokumen</button>
+        </div>
+      `;
+    }
+    
+    return `<small class="text-muted">Tiada dokumen dimuat naik.</small>`;
+  }
+
+  getDocumentState(docKey) {
+    const label = this.getDocumentLabel(docKey);
+    const urlKey = `${docKey}_url`;
+    const nameKey = `${docKey}_name`;
+    const docIdKey = `${docKey}_doc_id`;
+    
+    let url = this.kirData?.[urlKey] || '';
+    if (!url && docKey === 'sijil_lahir') {
+      url = this.kirData?.sijil_lahir || '';
+    }
+    
+    return {
+      url,
+      name: this.kirData?.[nameKey] || '',
+      docId: this.kirData?.[docIdKey] || null,
+      label
+    };
+  }
+
+  getDocumentLabel(docKey) {
+    return docKey === 'ic_document' ? 'Kad Pengenalan' : 'Sijil Lahir';
+  }
+
+  handleDocumentFileChange(docKey, input) {
+    if (!input) return;
+    const file = input.files && input.files[0];
+    const preview = document.querySelector(`.document-preview[data-doc="${docKey}"]`);
+    const removeInput = document.getElementById(`${docKey}_remove`);
+    if (removeInput) {
+      removeInput.value = 'false';
+    }
+    if (!preview) return;
+    if (file) {
+      preview.innerHTML = `<small style="color: #2563eb;">Fail dipilih: ${this.escapeHtml(file.name)}</small>`;
+    } else {
+      this.updateDocumentPreviewFromData(docKey);
+    }
+  }
+
+  updateDocumentPreviewFromData(docKey) {
+    const preview = document.querySelector(`.document-preview[data-doc="${docKey}"]`);
+    if (preview) {
+      preview.innerHTML = this.buildDocumentPreviewInner(docKey);
+    }
+  }
+
+  markDocumentForRemoval(docKey) {
+    const removeInput = document.getElementById(`${docKey}_remove`);
+    if (removeInput) {
+      removeInput.value = 'true';
+    }
+    const fileInput = document.getElementById(`${docKey}_file`);
+    if (fileInput) {
+      fileInput.value = '';
+    }
+    const preview = document.querySelector(`.document-preview[data-doc="${docKey}"]`);
+    if (preview) {
+      preview.innerHTML = `
+        <div class="document-actions removal-pending">
+          <small style="color: #d97706;">Dokumen akan dipadam selepas klik Simpan.</small>
+          <button type="button" class="btn btn-link" onclick="kirProfile.cancelDocumentRemoval('${docKey}')">Batalkan</button>
+        </div>
+      `;
+    }
+  }
+
+  cancelDocumentRemoval(docKey) {
+    const removeInput = document.getElementById(`${docKey}_remove`);
+    if (removeInput) {
+      removeInput.value = 'false';
+    }
+    this.updateDocumentPreviewFromData(docKey);
   }
 
 
@@ -1899,13 +2020,21 @@ export class KIRProfile {
       .join('');
   }
 
-  formatNoKP(noKp) {
-    if (!noKp) return 'Tiada';
-    const digits = `${noKp}`.replace(/\D/g, '');
-    if (digits.length === 12) {
-      return `${digits.slice(0, 6)}-${digits.slice(6, 8)}-${digits.slice(8)}`;
-    }
-    return noKp;
+  formatNoKP(noKp, options = {}) {
+    const fallback = options.fallback ?? 'Tiada';
+    if (!noKp) return fallback;
+    const formatted = formatICWithDashes(noKp);
+    return formatted || noKp || fallback;
+  }
+
+  escapeHtml(value) {
+    if (value === null || value === undefined) return '';
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   // Get status class for avatar indicator
@@ -2229,7 +2358,13 @@ export class KIRProfile {
       }
       
       // Get form data
-      const formData = this.getFormData(form, tabId);
+      const rawFormData = new FormData(form);
+      const formData = this.getFormData(form, tabId, rawFormData);
+      
+      // Handle document uploads/removals specific to Maklumat Asas
+      if (tabId === 'maklumat-asas') {
+        await this.processMaklumatAsasDocuments(rawFormData, formData);
+      }
       
       // Show loading
       this.showSaveLoading(tabId);
@@ -2256,12 +2391,19 @@ export class KIRProfile {
   }
 
   // Get form data based on tab type
-  getFormData(form, tabId) {
-    const formData = new FormData(form);
+  getFormData(form, tabId, providedFormData = null) {
+    const formData = providedFormData || new FormData(form);
     const data = {};
     
     // Convert FormData to object
     for (let [key, value] of formData.entries()) {
+      if (value instanceof File) {
+        // Handle files separately (upload before save)
+        if (!value.name) {
+          continue;
+        }
+        continue;
+      }
       data[key] = value;
     }
     
@@ -2289,6 +2431,65 @@ export class KIRProfile {
     }
     
     return data;
+  }
+
+  async processMaklumatAsasDocuments(rawFormData, data) {
+    if (!rawFormData) return;
+    
+    const configs = [
+      { key: 'sijil_lahir', fileField: 'sijil_lahir_file', removeField: 'sijil_lahir_remove', category: 'Sijil Lahir' },
+      { key: 'ic_document', fileField: 'ic_document_file', removeField: 'ic_document_remove', category: 'Kad Pengenalan' }
+    ];
+    
+    for (const config of configs) {
+      const file = rawFormData.get(config.fileField);
+      const shouldRemove = data[config.removeField] === 'true';
+      delete data[config.removeField];
+      
+      const hasNewFile = file instanceof File && file.name;
+      if (!hasNewFile && !shouldRemove) {
+        continue;
+      }
+      
+      const currentState = this.getDocumentState(config.key);
+      const existingDocId = currentState?.docId || null;
+      
+      if (hasNewFile) {
+        await this.replaceIdentityDocument(config, file, data, existingDocId);
+      } else if (shouldRemove) {
+        await this.removeIdentityDocument(config, data, existingDocId);
+      }
+    }
+  }
+  
+  async replaceIdentityDocument(config, file, target, existingDocId) {
+    if (!file) return;
+    await this.deleteExistingDocument(existingDocId);
+    try {
+      const uploaded = await DokumenService.uploadDokumen(this.kirId, file, config.category);
+      target[`${config.key}_url`] = uploaded.url;
+      target[`${config.key}_name`] = uploaded.name || file.name;
+      target[`${config.key}_doc_id`] = uploaded.id;
+    } catch (error) {
+      console.error(`Gagal memuat naik dokumen ${config.category}:`, error);
+      throw error;
+    }
+  }
+  
+  async removeIdentityDocument(config, target, existingDocId) {
+    await this.deleteExistingDocument(existingDocId);
+    target[`${config.key}_url`] = null;
+    target[`${config.key}_name`] = null;
+    target[`${config.key}_doc_id`] = null;
+  }
+  
+  async deleteExistingDocument(docId) {
+    if (!docId) return;
+    try {
+      await DokumenService.deleteDokumen(docId);
+    } catch (error) {
+      console.warn('Gagal memadam dokumen sedia ada:', error);
+    }
   }
 
   // Calculate KAFA score
@@ -2556,30 +2757,64 @@ export class KIRProfile {
     // Navigate back to Senarai KIR section in admin dashboard
     window.location.hash = '#/admin';
     
-    // After navigation, activate the Senarai KIR section
+    // After navigation, activate the latest Senarai KIR section
     setTimeout(() => {
-      // Update active nav item
-      document.querySelectorAll('.nav-item').forEach(item => {
-        item.classList.remove('active');
-      });
-      const senariKirNav = document.querySelector('[data-section="senarai-kir"]');
-      if (senariKirNav) {
-        senariKirNav.classList.add('active');
+      this.activateSenaraiKIRSection();
+    }, 150);
+  }
+  
+  async activateSenaraiKIRSection() {
+    try {
+      document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+      const navNew = document.querySelector('[data-section="senarai-kir-new"]');
+      const navLegacy = document.querySelector('[data-section="senarai-kir"]');
+      const targetNav = navNew || navLegacy;
+      if (targetNav) {
+        targetNav.classList.add('active');
       }
       
-      // Show Senarai KIR content section
-      document.querySelectorAll('.content-section').forEach(content => {
-        content.classList.remove('active');
-      });
-      const senariKirContent = document.getElementById('senarai-kir-content');
-      if (senariKirContent) {
-        senariKirContent.classList.add('active');
-        // Initialize KIR management for Senarai KIR section
+      document.querySelectorAll('.content-section').forEach(section => section.classList.remove('active'));
+      
+      const newContent = document.getElementById('senarai-kir-new-content');
+      if (newContent) {
+        newContent.classList.add('active');
+        await this.ensureSenaraiKIRNewLoaded(newContent);
+        return;
+      }
+      
+      const legacyContent = document.getElementById('senarai-kir-content');
+      if (legacyContent) {
+        legacyContent.classList.add('active');
         if (typeof initializeKIRManagement === 'function') {
           initializeKIRManagement();
         }
       }
-    }, 100);
+    } catch (error) {
+      console.error('Gagal mengaktifkan Senarai KIR:', error);
+    }
+  }
+  
+  async ensureSenaraiKIRNewLoaded(container) {
+    if (!container) return;
+    try {
+      if (!window.senaraiKIRNew) {
+        const { SenaraiKIR } = await import('./SenaraiKIR.js');
+        window.senaraiKIRNew = new SenaraiKIR();
+      }
+      const instance = window.senaraiKIRNew;
+      const alreadyLoaded = container.dataset && container.dataset.senaraiKirLoaded === 'true';
+      if (!alreadyLoaded) {
+        container.innerHTML = instance.createContent();
+        await instance.initialize();
+        if (container.dataset) {
+          container.dataset.senaraiKirLoaded = 'true';
+        }
+      } else if (typeof instance.loadKIRData === 'function') {
+        await instance.loadKIRData();
+      }
+    } catch (error) {
+      console.error('Error loading Senarai KIR (New):', error);
+    }
   }
 
   // Handle route changes
@@ -4237,25 +4472,38 @@ export class KIRProfile {
     this.programData = originalData;
   }
 
-  // Toast notification helper
-  showToast(message, type = 'info') {
-    // Simple toast implementation - can be enhanced
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-    toast.textContent = message;
+  // Inline notification helper
+  showToast(message, type = 'info', duration = 3000) {
+    const activePane = document.querySelector('.tab-pane.active');
+    const preferredContainer = activePane?.querySelector('.form-actions') || activePane;
+    const container = preferredContainer || document.body;
     
-    document.body.appendChild(toast);
+    const existing = container.querySelector('.inline-feedback') || document.createElement('div');
+    if (!existing.classList.contains('inline-feedback')) {
+      existing.className = 'inline-feedback';
+      if (preferredContainer) {
+        preferredContainer.appendChild(existing);
+      } else {
+        container.appendChild(existing);
+      }
+    }
     
-    setTimeout(() => {
-      toast.classList.add('show');
-    }, 100);
+    existing.textContent = message;
+    existing.classList.remove('inline-feedback-success', 'inline-feedback-error', 'inline-feedback-info', 'inline-feedback-warning');
+    existing.classList.add(`inline-feedback-${type}`);
+    existing.style.display = 'flex';
+    existing.style.opacity = '1';
     
-    setTimeout(() => {
-      toast.classList.remove('show');
+    if (this.inlineFeedbackTimer) {
+      clearTimeout(this.inlineFeedbackTimer);
+    }
+    this.inlineFeedbackTimer = setTimeout(() => {
+      existing.style.opacity = '0';
       setTimeout(() => {
-        document.body.removeChild(toast);
+        existing.style.display = 'none';
+        existing.style.opacity = '1';
       }, 300);
-    }, 3000);
+    }, duration);
   }
 }
 

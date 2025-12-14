@@ -3,6 +3,7 @@ import { FirebaseAuthService } from '../../services/frontend/FirebaseAuthService
 import { createRegistrationFormMarkup } from '../auth/LoginForm.js';
 import { normalizeNoKP } from '../../services/database/collections.js';
 import { KIRService } from '../../services/backend/KIRService.js';
+import { formatICWithDashes } from './KIRProfile/components/shared/icUtils.js';
 
 let currentAddUserContext = null;
 let currentEditingUser = null;
@@ -11,11 +12,8 @@ let userManagementToastTimer = null;
 
 function formatDisplayNoKP(noKp) {
   if (!noKp) return '-';
-  const digits = noKp.replace(/\D/g, '');
-  if (digits.length === 12) {
-    return `${digits.slice(0, 6)}-${digits.slice(6, 8)}-${digits.slice(8)}`;
-  }
-  return noKp;
+  const formatted = formatICWithDashes(noKp);
+  return formatted || noKp;
 }
 // Note: Firebase functions are dynamically imported in the code
 
@@ -3468,10 +3466,10 @@ function openAddUserModal(prefill = {}) {
   const noKpInput = modal.querySelector('#adminNoKPInput');
   if (noKpInput) {
     if (prefill.noKp) {
-      noKpInput.value = prefill.noKp;
+      noKpInput.value = formatICWithDashes(prefill.noKp);
     }
     noKpInput.addEventListener('input', (event) => {
-      event.target.value = normalizeNoKP(event.target.value).slice(0, 12);
+      event.target.value = formatICWithDashes(event.target.value);
     });
   }
 }
@@ -3527,10 +3525,11 @@ function getAddUserModalTemplate() {
                 id="adminNoKPInput" 
                 name="no_kp" 
                 required 
-                maxlength="12" 
+                maxlength="14" 
                 inputmode="numeric" 
-                placeholder="123456789012">
-              <small class="form-help">12 digit nombor sahaja, tanpa jarak atau tanda.</small>
+                pattern="\\d{6}-\\d{2}-\\d{4}"
+                placeholder="123456-12-1234">
+              <small class="form-help">Gunakan format standard: 123456-12-1234</small>
             </div>
             <div class="modal-actions">
               <button type="submit" class="btn btn-primary">Semak No. KP</button>
@@ -3658,7 +3657,7 @@ async function handleAdminNoKPCheck(event) {
       showUserFormStep({
         indexRecord,
         normalizedNoKP,
-        displayNoKP: indexRecord.no_kp_display || rawValue
+        displayNoKP: indexRecord.no_kp_display || formatDisplayNoKP(rawValue || normalizedNoKP)
       });
       setAddUserStatus('No. KP disahkan. Sila lengkapkan maklumat pengguna.', 'success');
       return;
@@ -3673,7 +3672,7 @@ async function handleAdminNoKPCheck(event) {
       showUserFormStep({
         indexRecord: createdRecord.indexRecord,
         normalizedNoKP: createdRecord.indexRecord.no_kp || normalizedNoKP,
-        displayNoKP: createdRecord.indexRecord.no_kp_display || normalizedNoKP,
+        displayNoKP: createdRecord.indexRecord.no_kp_display || formatDisplayNoKP(normalizedNoKP),
         fallbackName: createdRecord.kirName
       });
       setAddUserStatus('KIR baharu berjaya dicipta. Sila lengkapkan maklumat pengguna.', 'success');

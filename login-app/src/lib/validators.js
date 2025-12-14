@@ -42,6 +42,12 @@ const KIR_SCHEMA = {
   // Official numbers
   no_kwsp: 'string',
   no_perkeso: 'string',
+  sijil_lahir_url: 'string',
+  sijil_lahir_name: 'string',
+  sijil_lahir_doc_id: 'string',
+  ic_document_url: 'string',
+  ic_document_name: 'string',
+  ic_document_doc_id: 'string',
   
   // System fields
   status_rekod: 'string',

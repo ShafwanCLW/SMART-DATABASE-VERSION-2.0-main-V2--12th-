@@ -1,6 +1,7 @@
 // Import KIR Service
 import { KIRService } from '../../services/backend/KIRService.js';
 import { validateKIR } from '../../lib/validators.js';
+import { formatICWithDashes, normalizeICDigits } from './KIRProfile/components/shared/icUtils.js';
 
 export class SenaraiKIR {
     constructor() {
@@ -132,13 +133,13 @@ export class SenaraiKIR {
                                     id="kir-ic" 
                                     name="no_kp" 
                                     class="form-input" 
-                                    placeholder="123456789012"
-                                    maxlength="12"
-                                    pattern="[0-9]{12}"
+                                    placeholder="123456-12-1234"
+                                    maxlength="14"
+                                    pattern="\\d{6}-\\d{2}-\\d{4}"
                                     required
                                 >
                                 <div class="error-text" id="ic-error"></div>
-                                <small class="form-help">12 digit nombor sahaja (contoh: 123456789012)</small>
+                                <small class="form-help">Ikuti format standard: 123456-12-1234</small>
                             </div>
                         </form>
                     </div>
@@ -698,16 +699,10 @@ export class SenaraiKIR {
             nextBtn.addEventListener('click', () => this.nextPage());
         }
 
-        // IC number input restriction (numbers only)
+        // IC number input mask
         document.addEventListener('input', (e) => {
             if (e.target && e.target.id === 'kir-ic') {
-                // Remove any non-numeric characters
-                e.target.value = e.target.value.replace(/[^0-9]/g, '');
-                
-                // Limit to 12 characters
-                if (e.target.value.length > 12) {
-                    e.target.value = e.target.value.substring(0, 12);
-                }
+                e.target.value = formatICWithDashes(e.target.value);
             }
         });
     }
@@ -772,7 +767,7 @@ export class SenaraiKIR {
                         <span class="user-email">${kir.email || 'Tiada Email'}</span>
                     </div>
                 </td>
-                <td class="nokp">${kir.no_kp || 'Tiada No. KP'}</td>
+                <td class="nokp">${this.formatICDisplay(kir.no_kp)}</td>
                 <td><span class="status-badge ${this.mapDatabaseStatusToUI(kir.status_rekod)}">${this.getStatusText(kir.status_rekod)}</span></td>
                 <td class="date">${this.formatDate(kir.tarikh_cipta)}</td>
                 <td>
@@ -829,7 +824,7 @@ export class SenaraiKIR {
             return;
         }
 
-        const confirmMessage = `Adakah anda pasti ingin memadam KIR untuk:\n\nNama: ${kir.nama_penuh}\nNo. KP: ${kir.no_kp}\n\nTindakan ini tidak boleh dibatalkan.`;
+        const confirmMessage = `Adakah anda pasti ingin memadam KIR untuk:\n\nNama: ${kir.nama_penuh}\nNo. KP: ${this.formatICDisplay(kir.no_kp)}\n\nTindakan ini tidak boleh dibatalkan.`;
         
         if (!confirm(confirmMessage)) {
             return;
@@ -1115,12 +1110,15 @@ export class SenaraiKIR {
      */
     formatICNumber(ic) {
         if (!ic) return '';
-        
-        // Remove all non-digits to match backend normalizeNoKP logic
-        const cleaned = ic.replace(/\D/g, '');
-        
-        // Return the digits-only IC number
-        return cleaned;
+        return normalizeICDigits(ic);
+    }
+
+    formatICDisplay(ic) {
+        const formatted = formatICWithDashes(ic);
+        if (formatted) {
+            return formatted;
+        }
+        return ic || 'Tiada No. KP';
     }
 
     /**
@@ -1156,14 +1154,15 @@ export class SenaraiKIR {
         
         // Validate IC number using validateKIR function (same as Cipta KIR)
         const ic = icInput.value.trim();
-        if (!ic) {
+        const normalizedIC = this.formatICNumber(ic);
+        if (!normalizedIC) {
             icError.textContent = 'No. Kad Pengenalan diperlukan';
             icInput.classList.add('error');
             isValid = false;
         } else {
             try {
                 // Use validateKIR to validate the IC number (same as Cipta KIR)
-                const testData = { no_kp: ic };
+                const testData = { no_kp: normalizedIC };
                 validateKIR(testData);
                 // If validateKIR doesn't throw an error, the IC is valid
             } catch (error) {

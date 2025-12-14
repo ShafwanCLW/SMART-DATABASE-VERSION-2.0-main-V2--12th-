@@ -1,6 +1,32 @@
 // Utility helpers for handling Malaysian IC (No. Kad Pengenalan) values
 
 /**
+ * Normalize an IC value to digits only (max 12 digits)
+ * @param {string} icValue
+ * @returns {string}
+ */
+export function normalizeICDigits(icValue = '') {
+  return (icValue || '').replace(/\D/g, '').slice(0, 12);
+}
+
+/**
+ * Format an IC value using the standard xxxxxx-xx-xxxx structure
+ * @param {string} icValue
+ * @returns {string}
+ */
+export function formatICWithDashes(icValue = '') {
+  const digits = normalizeICDigits(icValue);
+  if (!digits) return '';
+  if (digits.length <= 6) {
+    return digits;
+  }
+  if (digits.length <= 8) {
+    return `${digits.slice(0, 6)}-${digits.slice(6)}`;
+  }
+  return `${digits.slice(0, 6)}-${digits.slice(6, 8)}-${digits.slice(8)}`;
+}
+
+/**
  * Derive birth date and age info from a Malaysian IC number.
  * @param {string} icValue - IC number with or without dashes.
  * @returns {{ birthDate: Date, formattedDate: string, age: number } | null}
@@ -8,7 +34,7 @@
 export function deriveBirthInfoFromIC(icValue = '') {
   if (!icValue) return null;
 
-  const digits = icValue.replace(/\D/g, '');
+  const digits = normalizeICDigits(icValue);
   if (digits.length < 6) return null;
 
   const yearPart = parseInt(digits.slice(0, 2), 10);

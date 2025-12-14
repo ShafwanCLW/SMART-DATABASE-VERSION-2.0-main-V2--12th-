@@ -182,6 +182,7 @@ export class PekerjaanTab extends BaseTab {
     // Add event listener for status_pekerjaan change to show/hide relevant fields
     const statusSelect = document.getElementById('status_pekerjaan');
     if (statusSelect) {
+      let initializingStatus = true;
       statusSelect.addEventListener('change', (e) => {
         const value = e.target.value;
         const workRelatedGroups = [
@@ -204,11 +205,14 @@ export class PekerjaanTab extends BaseTab {
           });
         }
         
-        this.markDirty();
+        if (!initializingStatus) {
+          this.markDirty();
+        }
       });
       
       // Trigger initial state
       statusSelect.dispatchEvent(new Event('change'));
+      initializingStatus = false;
     }
 
     // Expose tab instance for inline handlers
