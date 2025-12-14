@@ -144,10 +144,13 @@ export class ProgramService {
       );
       
       const kehadiranSnapshot = await getDocs(kehadiranQuery);
-      const kehadiranRecords = kehadiranSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const currentEnv = getEnvironment();
+      const kehadiranRecords = kehadiranSnapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+        .filter(record => !record.env || record.env === currentEnv);
       
       // Get all programs to join with attendance data
       const programs = await ProgramService.listProgram();
@@ -197,9 +200,10 @@ export class ProgramService {
       const attendanceData = {
         kir_id: kirId,
         program_id: programId,
-        hadir: hadir,
+        hadir,
         catatan: catatan || '',
-        tarikh_kemas_kini: serverTimestamp()
+        tarikh_kemas_kini: serverTimestamp(),
+        env: getEnvironment()
       };
       
       if (existingSnapshot.empty) {
@@ -227,15 +231,14 @@ export class ProgramService {
       const kehadiranQuery = query(
         collection(db, COLLECTIONS.KEHADIRAN_PROGRAM),
         where('program_id', '==', programId),
-        createEnvFilter(),
         orderBy('tarikh', 'desc')
       );
       
       const snapshot = await getDocs(kehadiranQuery);
-      return snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const currentEnv = getEnvironment();
+      return snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(record => !record.env || record.env === currentEnv);
     } catch (error) {
       console.error('Error listing kehadiran by program:', error);
       throw new Error('Gagal memuat rekod kehadiran program: ' + error.message);
@@ -354,13 +357,11 @@ export class ProgramService {
       const programs = programSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
       // Get all attendance records
-      const attendanceQuery = query(
-        collection(db, 'kehadiran_program'),
-        createEnvFilter()
-      );
-      
-      const attendanceSnapshot = await getDocs(attendanceQuery);
-      const attendanceRecords = attendanceSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const attendanceSnapshot = await getDocs(collection(db, COLLECTIONS.KEHADIRAN_PROGRAM));
+      const currentEnv = getEnvironment();
+      const attendanceRecords = attendanceSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(record => !record.env || record.env === currentEnv);
       
       // Create a map of attendance records by participant ID and program ID
       const attendanceMap = new Map();
@@ -385,10 +386,10 @@ export class ProgramService {
             participantName: kir.nama_penuh || kir.nama || 'Unknown',
             participantType: 'KIR',
             programId: program.id,
-            programName: program.name,
+            programName: program.nama_program || program.name || 'Unknown Program',
             present: attendanceRecord?.hadir || false,
             notes: attendanceRecord?.catatan || '',
-            date: program.startDate
+            date: program.tarikh_mula || program.startDate || program.tarikh || null
           });
         });
       });
@@ -406,10 +407,10 @@ export class ProgramService {
             participantName: pkir.nama || pkir.asas?.nama || 'Unknown',
             participantType: 'PKIR',
             programId: program.id,
-            programName: program.name,
+            programName: program.nama_program || program.name || 'Unknown Program',
             present: attendanceRecord?.hadir || false,
             notes: attendanceRecord?.catatan || '',
-            date: program.startDate
+            date: program.tarikh_mula || program.startDate || program.tarikh || null
           });
         });
       });
@@ -427,10 +428,10 @@ export class ProgramService {
             participantName: air.nama || 'Unknown',
             participantType: 'AIR',
             programId: program.id,
-            programName: program.name,
+            programName: program.nama_program || program.name || 'Unknown Program',
             present: attendanceRecord?.hadir || false,
             notes: attendanceRecord?.catatan || '',
-            date: program.startDate
+            date: program.tarikh_mula || program.startDate || program.tarikh || null
           });
         });
       });
@@ -562,7 +563,7 @@ export class ProgramService {
           program_id: programId,
           hadir: present,
           tarikh_kemas_kini: serverTimestamp(),
-          env: getCurrentEnv()
+          env: getEnvironment()
         };
         
         // Determine participant type and set the appropriate ID
@@ -609,7 +610,7 @@ export class ProgramService {
           program_id: programId,
           catatan: notes,
           tarikh_kemas_kini: serverTimestamp(),
-          env: getCurrentEnv()
+          env: getEnvironment()
         };
         
         // Determine participant type and set the appropriate ID

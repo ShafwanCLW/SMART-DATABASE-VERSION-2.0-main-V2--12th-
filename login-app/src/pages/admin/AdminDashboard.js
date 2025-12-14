@@ -894,8 +894,10 @@ export function createAdminMainContent() {
     
     .report-sections-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
       gap: 20px;
+      grid-auto-flow: row dense;
+      align-items: stretch;
     }
     
     .report-section-card {
@@ -908,6 +910,20 @@ export function createAdminMainContent() {
       flex-direction: column;
       gap: 16px;
       min-height: 280px;
+    }
+
+    .report-section-card.span-2 {
+      grid-column: span 2;
+    }
+
+    .report-section-card.span-full {
+      grid-column: 1 / -1;
+    }
+
+    @media (max-width: 1400px) {
+      .report-section-card.span-2 {
+        grid-column: span 1;
+      }
     }
     
     .report-section-card header {
@@ -2582,7 +2598,7 @@ export function createAdminMainContent() {
         </div>
         
         <div class="report-sections-grid">
-          <section class="report-section-card" style="grid-column: span 2;">
+          <section class="report-section-card span-2">
             <header>
               <h4>Program Performance</h4>
               <span id="report-program-summary" class="helper"></span>
@@ -2621,7 +2637,7 @@ export function createAdminMainContent() {
             <div id="report-top-participants" class="report-list"></div>
           </section>
           
-          <section class="report-section-card" style="grid-column: span 4 ;">
+          <section class="report-section-card span-full">
             <header>
               <h4>Financial Snapshot</h4>
               <span class="helper">Income, expenses, and recent activity</span>

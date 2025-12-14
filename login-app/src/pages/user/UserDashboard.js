@@ -1,5 +1,9 @@
 import { KIRProfile } from '../admin/KIRProfile.js';
 import { FirebaseAuthService } from '../../services/frontend/FirebaseAuthService.js';
+import { KIRService } from '../../services/backend/KIRService.js';
+import { AIRService } from '../../services/backend/AIRService.js';
+import { PasanganService } from '../../services/backend/PasanganService.js';
+import { ProgramService } from '../../services/backend/ProgramService.js';
 
 // User dashboard component
 export function createUserSidebar(user) {
@@ -40,6 +44,28 @@ export function createUserSidebar(user) {
 export function createUserMainContent() {
   return `
     <style>
+      .stats-grid .stat-meta {
+        margin: 0;
+        color: #94a3b8;
+        font-size: 0.9rem;
+      }
+      .dashboard-status-message {
+        display: none;
+        margin: 1rem 0 0;
+        padding: 12px 16px;
+        border-radius: 12px;
+        font-size: 0.95rem;
+        background: #eef2ff;
+        color: #312e81;
+      }
+      .dashboard-status-message.error {
+        background: #fef2f2;
+        color: #991b1b;
+      }
+      .dashboard-status-message.success {
+        background: #ecfdf5;
+        color: #065f46;
+      }
       #user-settings-wrapper .setting-card {
         background: #fff;
         border-radius: 18px;
@@ -97,29 +123,40 @@ export function createUserMainContent() {
     </style>
     <div id="dashboard-content" class="content-section active">
       <div class="stats-grid">
-        <div class="stat-card">
+        <div class="stat-card" id="stat-card-programs">
           <div class="stat-header">
-            <h3 class="stat-title">My Activities</h3>
-            <span class="stat-icon">📋</span>
+            <h3 class="stat-title">Program Joined</h3>
+            <span class="stat-icon"><i class="fas fa-calendar-check"></i></span>
           </div>
-          <p class="stat-value">24</p>
+          <p class="stat-value" id="stat-programs-joined">-</p>
+          <p class="stat-meta" id="stat-programs-meta">Memuatkan data...</p>
         </div>
-        <div class="stat-card">
+        <div class="stat-card" id="stat-card-kir">
           <div class="stat-header">
-            <h3 class="stat-title">Completed Tasks</h3>
-            <span class="stat-icon">✅</span>
+            <h3 class="stat-title">KIR Record</h3>
+            <span class="stat-icon"><i class="fas fa-id-card"></i></span>
           </div>
-          <p class="stat-value">18</p>
+          <p class="stat-value" id="stat-kir-status">-</p>
+          <p class="stat-meta" id="stat-kir-meta">Memuatkan data...</p>
         </div>
-        <div class="stat-card">
+        <div class="stat-card" id="stat-card-pkir">
           <div class="stat-header">
-            <h3 class="stat-title">Profile Score</h3>
-            <span class="stat-icon">⭐</span>
+            <h3 class="stat-title">PKIR Status</h3>
+            <span class="stat-icon"><i class="fas fa-heart"></i></span>
           </div>
-          <p class="stat-value">95%</p>
+          <p class="stat-value" id="stat-pkir-status">-</p>
+          <p class="stat-meta" id="stat-pkir-meta">Memuatkan data...</p>
+        </div>
+        <div class="stat-card" id="stat-card-air">
+          <div class="stat-header">
+            <h3 class="stat-title">Household Members</h3>
+            <span class="stat-icon"><i class="fas fa-users"></i></span>
+          </div>
+          <p class="stat-value" id="stat-air-count">-</p>
+          <p class="stat-meta" id="stat-air-meta">Memuatkan data...</p>
         </div>
       </div>
-      
+      <div id="dashboard-stats-status" class="dashboard-status-message"></div>
       <div class="quick-actions">
         <h3 class="section-title">Quick Actions</h3>
         <div class="action-buttons">
@@ -261,10 +298,216 @@ export function createUserDashboard(user) {
 }
 
 let userKIRProfileInstance = null;
+let userDashboardStatsPromise = null;
 
 export function setupUserDashboardFeatures(user) {
   setupUserKIRProfileSection(user);
+  initializeUserDashboardStats(user);
   initializeUserChangePasswordForm();
+}
+
+
+async function initializeUserDashboardStats(user) {
+  showDashboardStatsLoadingState();
+
+  if (!user || !user.kir_id) {
+    setDashboardStatusMessage('Akaun anda belum dipautkan kepada rekod KIR. Hubungi pentadbir untuk bantuan.', 'error');
+    setStatValue('stat-kir-status', 'Tiada KIR');
+    setStatMeta('stat-kir-meta', 'Pautkan akaun kepada rekod KIR untuk melihat data.');
+    setStatValue('stat-programs-joined', '0');
+    setStatMeta('stat-programs-meta', 'Tiada program yang direkodkan.');
+    setStatValue('stat-pkir-status', 'Tiada Rekod');
+    setStatMeta('stat-pkir-meta', 'Rekod pasangan belum tersedia.');
+    setStatValue('stat-air-count', '0');
+    setStatMeta('stat-air-meta', 'Tiada ahli isi rumah berdaftar.');
+    return;
+  }
+
+  if (userDashboardStatsPromise) {
+    return userDashboardStatsPromise;
+  }
+
+  const pending = (async () => {
+    try {
+      const [kirData, pkirData, airList, attendanceRecords] = await Promise.all([
+        KIRService.getKIRById(user.kir_id),
+        PasanganService.getPKIRByKirId(user.kir_id).catch(() => null),
+        AIRService.listAIR(user.kir_id),
+        ProgramService.listKehadiranByKir(user.kir_id)
+      ]);
+
+      const success = applyDashboardStats({
+        kirData,
+        pkirData,
+        airList: Array.isArray(airList) ? airList : [],
+        attendanceRecords: Array.isArray(attendanceRecords) ? attendanceRecords : []
+      });
+
+      if (success) {
+        setDashboardStatusMessage('');
+      }
+    } catch (error) {
+      console.error('Failed to load user dashboard stats:', error);
+      setDashboardStatusMessage(error.message || 'Gagal memuatkan data papan pemuka.', 'error');
+    } finally {
+      userDashboardStatsPromise = null;
+    }
+  })();
+
+  userDashboardStatsPromise = pending;
+  return pending;
+}
+
+function applyDashboardStats({ kirData, pkirData, airList, attendanceRecords }) {
+  if (!kirData) {
+    setStatValue('stat-kir-status', 'Tiada Rekod');
+    setStatMeta('stat-kir-meta', 'Rekod KIR tidak ditemui.');
+    setDashboardStatusMessage('Rekod KIR tidak ditemui. Sila hubungi pentadbir.', 'error');
+    return false;
+  }
+
+  const kirName = kirData.nama_penuh || kirData.nama || 'Rekod KIR';
+  const kirStatus = kirData.status_rekod || 'Tidak diketahui';
+  const kirUpdated = formatDisplayDate(kirData.tarikh_kemas_kini || kirData.tarikh_cipta);
+  setStatValue('stat-kir-status', kirStatus);
+  setStatMeta('stat-kir-meta', kirUpdated ? `${kirName} | Dikemas kini ${kirUpdated}` : kirName);
+
+  const joinedRecords = attendanceRecords.filter(record => record && record.kehadiran_id);
+  const programsJoined = joinedRecords.length;
+  const programsAttended = joinedRecords.filter(record => record.hadir).length;
+  setStatValue('stat-programs-joined', formatNumber(programsJoined));
+  const nextProgram = getNextUpcomingProgram(joinedRecords);
+  if (programsJoined === 0) {
+    setStatMeta('stat-programs-meta', 'Tiada program yang disertai lagi.');
+  } else {
+    const attendanceSummary = `${formatNumber(programsAttended)}/${formatNumber(programsJoined)} hadir`;
+    if (nextProgram) {
+      const nextProgramName = nextProgram.nama_program || nextProgram.nama || 'Program seterusnya';
+      const nextProgramDate = nextProgram.startDate ? ` (${formatDisplayDate(nextProgram.startDate)})` : '';
+      setStatMeta('stat-programs-meta', `${attendanceSummary} | Seterusnya: ${nextProgramName}${nextProgramDate}`);
+    } else {
+      setStatMeta('stat-programs-meta', attendanceSummary);
+    }
+  }
+
+  const pkirExists = Boolean(pkirData);
+  setStatValue('stat-pkir-status', pkirExists ? 'Berdaftar' : 'Tiada Rekod');
+  if (pkirExists) {
+    const pkirName = pkirData.asas?.nama || pkirData.nama || 'Pasangan';
+    const pkirUpdated = formatDisplayDate(pkirData.tarikh_kemas_kini || pkirData.tarikh_cipta);
+    setStatMeta('stat-pkir-meta', pkirUpdated ? `${pkirName} | Dikemas kini ${pkirUpdated}` : pkirName);
+  } else {
+    setStatMeta('stat-pkir-meta', 'Cipta rekod pasangan dalam profil KIR.');
+  }
+
+  const airCount = airList.length;
+  setStatValue('stat-air-count', formatNumber(airCount));
+  if (airCount === 0) {
+    setStatMeta('stat-air-meta', 'Tiada ahli isi rumah berdaftar.');
+  } else {
+    const latestAIR = getLatestRecord(airList);
+    const latestName = latestAIR?.nama || latestAIR?.nama_penuh || 'Ahli Isi Rumah';
+    const latestUpdate = formatDisplayDate(latestAIR?.tarikh_kemas_kini || latestAIR?.tarikh_cipta);
+    setStatMeta('stat-air-meta', latestUpdate ? `${latestName} | Dikemas kini ${latestUpdate}` : `${latestName} disenaraikan.`);
+  }
+
+  return true;
+}
+
+function showDashboardStatsLoadingState() {
+  ['stat-programs-joined', 'stat-kir-status', 'stat-pkir-status', 'stat-air-count'].forEach(id => {
+    setStatValue(id, '...');
+  });
+  ['stat-programs-meta', 'stat-kir-meta', 'stat-pkir-meta', 'stat-air-meta'].forEach(id => {
+    setStatMeta(id, 'Memuatkan data...');
+  });
+  setDashboardStatusMessage('');
+}
+
+function setDashboardStatusMessage(message, type = 'info') {
+  const element = document.getElementById('dashboard-stats-status');
+  if (!element) return;
+  if (!message) {
+    element.style.display = 'none';
+    element.textContent = '';
+    element.classList.remove('error', 'success');
+    return;
+  }
+  element.style.display = 'block';
+  element.textContent = message;
+  element.classList.remove('error', 'success');
+  if (type && type !== 'info') {
+    element.classList.add(type);
+  }
+}
+
+function setStatValue(elementId, value) {
+  const element = document.getElementById(elementId);
+  if (element) {
+    element.textContent = value ?? '-';
+  }
+}
+
+function setStatMeta(elementId, value) {
+  const element = document.getElementById(elementId);
+  if (element) {
+    element.textContent = value ?? '';
+  }
+}
+
+function getNextUpcomingProgram(records = []) {
+  const now = new Date();
+  return records
+    .map(record => ({
+      ...record,
+      startDate: normalizeDateInput(record.tarikh_mula || record.startDate || record.tarikh_kehadiran)
+    }))
+    .filter(record => record.startDate && record.startDate >= now && !record.hadir)
+    .sort((a, b) => a.startDate - b.startDate)[0] || null;
+}
+
+function getLatestRecord(records) {
+  if (!Array.isArray(records) || records.length === 0) {
+    return null;
+  }
+  return [...records].sort((a, b) => {
+    const dateB = normalizeDateInput(b.tarikh_kemas_kini || b.tarikh_cipta);
+    const dateA = normalizeDateInput(a.tarikh_kemas_kini || a.tarikh_cipta);
+    return (dateB?.getTime() || 0) - (dateA?.getTime() || 0);
+  })[0];
+}
+
+function normalizeDateInput(value) {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  if (typeof value === 'object') {
+    if (typeof value.toDate === 'function') {
+      const date = value.toDate();
+      return Number.isNaN(date?.getTime()) ? null : date;
+    }
+    if (typeof value.seconds === 'number') {
+      const date = new Date(value.seconds * 1000);
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatDisplayDate(value) {
+  const date = normalizeDateInput(value);
+  if (!date) return '';
+  return date.toLocaleDateString('ms-MY', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
+}
+
+function formatNumber(value) {
+  return Number.isFinite(value) ? value.toLocaleString('en-MY') : value;
 }
 
 function setupUserKIRProfileSection(user) {

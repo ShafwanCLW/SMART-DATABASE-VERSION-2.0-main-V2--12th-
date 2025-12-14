@@ -534,6 +534,7 @@ export class KIRProfile {
 
   // Create sidebar navigation
   createSidebarNavigation() {
+    const hiddenTabs = new Set(['program']);
     const tabs = [
       { id: 'maklumat-asas', label: 'Maklumat Asas', icon: 'fas fa-user' },
       { id: 'kafa', label: 'Pendidikan Agama (KAFA)', icon: 'fas fa-mosque' },
@@ -547,7 +548,7 @@ export class KIRProfile {
       { id: 'air', label: 'Ahli Isi Rumah (AIR)', icon: 'fas fa-home' },
       { id: 'pkir', label: 'PKIR (Pasangan Ketua Isi Rumah)', icon: 'fas fa-heart' },
       { id: 'program', label: 'Program & Kehadiran', icon: 'fas fa-calendar-check' }
-    ];
+    ].filter(tab => !hiddenTabs.has(tab.id));
     
     const tabsHTML = tabs.map(tab => {
       // Handle regular tabs
