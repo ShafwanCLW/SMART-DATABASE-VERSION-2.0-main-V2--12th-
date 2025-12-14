@@ -3264,8 +3264,8 @@ export function createAdminDashboard(user) {
       
       <main class="main-content">
         <div class="content-header">
-          <h1 class="content-title">Emasa Smart Database</h1>
-          <p class="content-subtitle">Selamat Datang, ${user.name} - Urus pengguna, KIR, dan operasi sistem</p>
+          <h1 class="content-title">eMAS-SMART</h1>
+          <p class="content-subtitle">Electronic Mapping and Analytics - System Maklumat Asnaf Real Time</p>
         </div>
         
         ${mainContent}
