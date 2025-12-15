@@ -32,6 +32,8 @@ export const COLLECTIONS = {
   // Financial tracking
   FINANCIAL_INCOME: 'financial_income',
   FINANCIAL_EXPENSES: 'financial_expenses',
+  FINANCIAL_GRANTS: 'financial_grants',
+  FINANCIAL_TRANSACTIONS: 'financial_transactions',
   
   // Index and support
   INDEX_NOKP: 'index_nokp',

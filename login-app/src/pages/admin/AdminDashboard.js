@@ -8557,17 +8557,45 @@ async function fetchFinancialSummaryData() {
     const { db } = await import('../../services/database/firebase.js');
     const { COLLECTIONS, createEnvFilter } = await import('../../services/database/collections.js');
     
-    const [incomeSnapshot, expenseSnapshot] = await Promise.all([
+    const [
+      grantsSnapshot,
+      transactionsSnapshot,
+      legacyIncomeSnapshot,
+      legacyExpenseSnapshot
+    ] = await Promise.all([
+      getDocs(query(collection(db, COLLECTIONS.FINANCIAL_GRANTS), createEnvFilter())),
+      getDocs(query(collection(db, COLLECTIONS.FINANCIAL_TRANSACTIONS), createEnvFilter())),
       getDocs(query(collection(db, COLLECTIONS.FINANCIAL_INCOME), createEnvFilter())),
       getDocs(query(collection(db, COLLECTIONS.FINANCIAL_EXPENSES), createEnvFilter()))
     ]);
     
-    const parseTransaction = (doc, type) => {
+    const parseGrantTransaction = doc => {
+      const data = doc.data();
+      const amount = Number(data.amount) || 0;
+      if (!Number.isFinite(amount)) return null;
+      const type = data.type === 'deduction' ? 'expense' : 'income';
+      const dateValue = data.createdAt || data.date || data.updatedAt || new Date();
+      const date = normalizeToDate(dateValue) || new Date();
+      const grantNames = Array.isArray(data.grantImpacts)
+        ? data.grantImpacts
+            .map(impact => impact.grantName || impact.grantId)
+            .filter(Boolean)
+            .join(', ')
+        : '';
+      return {
+        id: doc.id,
+        type,
+        title: data.description || (type === 'expense' ? 'Tolakan Dana' : 'Dana Masuk'),
+        category: grantNames || type,
+        amount,
+        date
+      };
+    };
+    
+    const parseLegacyTransaction = (doc, type) => {
       const data = doc.data();
       const rawAmount = parseFloat(data.amount ?? data.jumlah ?? data.value ?? 0);
-      if (!Number.isFinite(rawAmount)) {
-        return null;
-      }
+      if (!Number.isFinite(rawAmount)) return null;
       const dateValue = data.date || data.tarikh || data.tarikh_cipta || data.tarikh_transaksi;
       const date = normalizeToDate(dateValue) || new Date();
       return {
@@ -8580,16 +8608,52 @@ async function fetchFinancialSummaryData() {
       };
     };
     
-    const incomeTransactions = incomeSnapshot.docs
-      .map(doc => parseTransaction(doc, 'income'))
+    const grantTransactions = transactionsSnapshot.docs
+      .map(parseGrantTransaction)
       .filter(Boolean);
-    const expenseTransactions = expenseSnapshot.docs
-      .map(doc => parseTransaction(doc, 'expense'))
+    const hasGrantData = grantsSnapshot.docs.length > 0 || grantTransactions.length > 0;
+    
+    if (hasGrantData) {
+      const grantTotals = grantsSnapshot.docs.reduce(
+        (totals, doc) => {
+          const data = doc.data();
+          const totalAmount = Number(data.totalAmount) || 0;
+          const availableAmount = Number(
+            data.availableAmount !== undefined ? data.availableAmount : totalAmount
+          );
+          return {
+            totalIncome: totals.totalIncome + totalAmount,
+            available: totals.available + Math.max(availableAmount, 0)
+          };
+        },
+        { totalIncome: 0, available: 0 }
+      );
+      
+      const totalIncome = grantTotals.totalIncome;
+      const totalExpenses = Math.max(totalIncome - grantTotals.available, 0);
+      const netBalance = grantTotals.available;
+      const recentTransactions = grantTransactions
+        .sort((a, b) => b.date - a.date)
+        .slice(0, 5);
+      
+      return {
+        totalIncome,
+        totalExpenses,
+        netBalance,
+        recentTransactions
+      };
+    }
+    
+    const legacyIncomeTransactions = legacyIncomeSnapshot.docs
+      .map(doc => parseLegacyTransaction(doc, 'income'))
+      .filter(Boolean);
+    const legacyExpenseTransactions = legacyExpenseSnapshot.docs
+      .map(doc => parseLegacyTransaction(doc, 'expense'))
       .filter(Boolean);
     
-    const totalIncome = incomeTransactions.reduce((sum, tx) => sum + tx.amount, 0);
-    const totalExpenses = expenseTransactions.reduce((sum, tx) => sum + tx.amount, 0);
-    const recentTransactions = [...incomeTransactions, ...expenseTransactions]
+    const totalIncome = legacyIncomeTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+    const totalExpenses = legacyExpenseTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+    const recentTransactions = [...legacyIncomeTransactions, ...legacyExpenseTransactions]
       .sort((a, b) => b.date - a.date)
       .slice(0, 5);
     

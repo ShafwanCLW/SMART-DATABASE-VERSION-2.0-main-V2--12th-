@@ -2710,6 +2710,22 @@ body.kir-profile-active #app {
   justify-content: flex-end;
 }
 
+.financial-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: #ffffff;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  padding: clamp(16px, 2vw, 24px);
+  box-shadow: 0 18px 35px rgba(15, 23, 42, 0.08);
+}
+
+.financial-quick-actions .btn {
+  min-width: 140px;
+  justify-content: center;
+}
+
 .financial-newest .btn {
   border: none;
   border-radius: 999px;
@@ -2720,6 +2736,11 @@ body.kir-profile-active #app {
   gap: 8px;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.financial-newest .btn.btn-sm {
+  padding: 6px 12px;
+  font-size: 0.85rem;
 }
 
 .financial-newest .btn.btn-primary {
@@ -3015,8 +3036,8 @@ body.kir-profile-active #app {
 }
 
 .financial-drawer {
-  justify-content: flex-end;
-  align-items: stretch;
+  justify-content: center;
+  align-items: center;
 }
 
 .financial-layer {
@@ -3028,10 +3049,10 @@ body.kir-profile-active #app {
 .layer-panel {
   background: #fff;
   border-radius: 26px;
-  width: min(960px, 100%);
-  max-height: 100%;
+  width: min(1100px, 95vw);
+  max-height: 95vh;
   overflow-y: auto;
-  padding: clamp(20px, 3vw, 34px);
+  padding: clamp(18px, 2vw, 28px);
   box-shadow: 0 40px 60px rgba(15, 23, 42, 0.22);
 }
 
@@ -3044,7 +3065,7 @@ body.kir-profile-active #app {
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 
 .drawer-header h3 {
@@ -3054,14 +3075,14 @@ body.kir-profile-active #app {
 
 .financial-drawer .form-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px 18px;
 }
 
 .financial-drawer .form-group {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .financial-drawer .form-label {
@@ -3078,8 +3099,14 @@ body.kir-profile-active #app {
   background: #fff;
 }
 
+.form-helper {
+  font-size: 0.85rem;
+  color: #475569;
+  margin-top: 4px;
+}
+
 .financial-drawer .form-textarea {
-  min-height: 120px;
+  min-height: 90px;
   resize: vertical;
 }
 
@@ -3088,7 +3115,49 @@ body.kir-profile-active #app {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 12px;
-  margin-top: 8px;
+  margin-top: 0;
+}
+
+.deduction-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.deduction-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 12px;
+  background: #fdfdfd;
+}
+
+.deduction-row-main {
+  display: grid;
+  grid-template-columns: 1fr 160px 40px;
+  gap: 12px;
+  align-items: center;
+}
+
+.deduction-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.deduction-row-main .btn {
+  padding: 10px 12px;
+}
+
+.grant-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .recent-activity-panel .empty-text,

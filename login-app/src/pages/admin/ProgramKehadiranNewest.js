@@ -16,7 +16,8 @@ export class ProgramKehadiranNewest {
         programId: '',
         search: ''
       },
-      reportSelection: null
+      reportSelection: null,
+      programStatusFilter: 'active'
     };
   }
 
@@ -97,6 +98,18 @@ export class ProgramKehadiranNewest {
                 Refresh
               </button>
             </div>
+          </div>
+
+          <div class="program-status-tabs" data-role="program-status-tabs">
+            <button class="status-tab active" data-status="active">
+              Aktif <span class="count" data-status-count="active">0</span>
+            </button>
+            <button class="status-tab" data-status="upcoming">
+              Akan Datang <span class="count" data-status-count="upcoming">0</span>
+            </button>
+            <button class="status-tab" data-status="completed">
+              Selesai <span class="count" data-status-count="completed">0</span>
+            </button>
           </div>
 
           <div class="table-container">
@@ -229,6 +242,7 @@ export class ProgramKehadiranNewest {
     this.cacheDom();
     this.bindOverviewNavigation();
     this.bindManagementActions();
+    this.setupProgramStatusTabs();
     this.bindAttendanceActions();
     this.bindReportActions();
   }
@@ -243,6 +257,7 @@ export class ProgramKehadiranNewest {
 
     this.elements = {
       programsTableBody: this.root.querySelector('[data-role="program-table-body"]'),
+      programStatusTabs: this.root.querySelector('[data-role="program-status-tabs"]'),
       attendanceTableBody: this.root.querySelector('[data-role="attendance-table-body"]'),
       attendanceSummary: this.root.querySelector('[data-role="attendance-summary"]'),
       topParticipants: this.root.querySelector('[data-role="top-participants"]'),
@@ -301,6 +316,23 @@ export class ProgramKehadiranNewest {
     }
   }
 
+  setupProgramStatusTabs() {
+    const tabs = this.elements.programStatusTabs;
+    if (!tabs) return;
+    tabs.querySelectorAll('[data-status]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const status = btn.getAttribute('data-status');
+        if (!status || status === this.state.programStatusFilter) {
+          return;
+        }
+        this.state.programStatusFilter = status;
+        this.updateProgramStatusTabs();
+        this.renderProgramTable();
+      });
+    });
+    this.updateProgramStatusTabs();
+  }
+
   bindAttendanceActions() {
     const exportBtn = this.root.querySelector('[data-action="export-attendance"]');
 
@@ -318,6 +350,31 @@ export class ProgramKehadiranNewest {
 
   bindReportActions() {
     // Reports load automatically when the section opens, so no extra listeners are required here.
+  }
+
+  updateProgramStatusTabs() {
+    const tabs = this.elements.programStatusTabs;
+    if (!tabs) return;
+    const programs = this.state.programs || [];
+    const statusCounts = programs.reduce(
+      (counts, program) => {
+        const status = this.resolveStatus(program).className;
+        if (status) {
+          counts[status] = (counts[status] || 0) + 1;
+        }
+        return counts;
+      },
+      { active: 0, upcoming: 0, completed: 0 }
+    );
+
+    tabs.querySelectorAll('[data-status]').forEach(btn => {
+      const status = btn.getAttribute('data-status');
+      btn.classList.toggle('active', status === this.state.programStatusFilter);
+      const countEl = btn.querySelector('[data-status-count]');
+      if (countEl && status) {
+        countEl.textContent = statusCounts[status] ?? 0;
+      }
+    });
   }
 
   showSection(sectionKey) {
@@ -350,17 +407,16 @@ export class ProgramKehadiranNewest {
       if (!programs || programs.length === 0) {
         target.innerHTML = `
           <tr>
-            
+            <td colspan="7" class="placeholder-text">Tiada program direkodkan.</td>
           </tr>
         `;
         this.populateProgramFilter([]);
+        this.updateProgramStatusTabs();
         return;
       }
 
-      const rows = programs.map(program => this.buildProgramRow(program)).join('');
-      target.innerHTML = rows;
       this.populateProgramFilter(programs);
-      this.bindProgramActions();
+      this.renderProgramTable();
       this.renderAttendanceProgramList();
     } catch (error) {
       console.error('ProgramKehadiranNewest: gagal memuat program', error);
@@ -371,7 +427,48 @@ export class ProgramKehadiranNewest {
           </td>
         </tr>
       `;
+      this.updateProgramStatusTabs();
     }
+  }
+
+  renderProgramTable() {
+    const target = this.elements.programsTableBody;
+    if (!target) return;
+
+    const programs = this.state.programs || [];
+    if (!programs.length) {
+      target.innerHTML = `
+        <tr>
+          <td colspan="7" class="placeholder-text">Tiada program direkodkan.</td>
+        </tr>
+      `;
+      return;
+    }
+
+    const filtered = programs.filter(program => {
+      const status = this.resolveStatus(program).className;
+      return status === this.state.programStatusFilter;
+    });
+
+    if (!filtered.length) {
+      const statusLabel =
+        this.state.programStatusFilter === 'active'
+          ? 'aktif'
+          : this.state.programStatusFilter === 'upcoming'
+            ? 'akan datang'
+            : 'selesai';
+      target.innerHTML = `
+        <tr>
+          <td colspan="7" class="placeholder-text">Tiada program ${statusLabel} ditemui.</td>
+        </tr>
+      `;
+      this.updateProgramStatusTabs();
+      return;
+    }
+
+    target.innerHTML = filtered.map(program => this.buildProgramRow(program)).join('');
+    this.updateProgramStatusTabs();
+    this.bindProgramActions();
   }
 
   renderAttendanceProgramList() {
@@ -761,13 +858,14 @@ export class ProgramKehadiranNewest {
   async createTestProgram() {
     try {
       const timestamp = new Date().toISOString();
+      const status = this.getStatusLabelFromDates(timestamp, timestamp);
       await ProgramService.createProgram({
         name: `Demo Program ${timestamp.slice(0, 10)}`,
         description: 'Program contoh yang dijana secara automatik.',
         startDate: timestamp,
         endDate: timestamp,
         category: 'Demo',
-        status: 'Upcoming',
+        status,
         location: 'Ibu Pejabat'
       });
       this.showToast('Program contoh berjaya dicipta.', 'success');
@@ -815,20 +913,9 @@ export class ProgramKehadiranNewest {
               <input id="program-newest-end" name="endDate" type="date" class="form-input" required>
             </div>
           </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="program-newest-category">Kategori</label>
-              <input id="program-newest-category" name="category" type="text" class="form-input" placeholder="Contoh: Pendidikan" required>
-            </div>
-            <div class="form-group">
-              <label for="program-newest-status">Status</label>
-              <select id="program-newest-status" name="status" class="form-input" required>
-                <option value="Upcoming" selected>Upcoming</option>
-                <option value="Active">Active</option>
-                <option value="Completed">Completed</option>
-                <option value="Cancelled">Cancelled</option>
-              </select>
-            </div>
+          <div class="form-group">
+            <label for="program-newest-category">Kategori</label>
+            <input id="program-newest-category" name="category" type="text" class="form-input" placeholder="Contoh: Pendidikan" required>
           </div>
           <div class="form-row">
             <div class="form-group">
@@ -916,22 +1003,24 @@ export class ProgramKehadiranNewest {
       const startDate = formData.get("startDate");
       const endDate = formData.get("endDate");
       const category = (formData.get("category") || "").toString();
-      const status = (formData.get("status") || "").toString();
       const location = (formData.get("location") || "").toString().trim();
       const timeScale = (formData.get("time_scale") || "").toString();
       const coOrganizer = (formData.get("co_organizer") || "").toString().trim();
       const expenses = (formData.get("expenses") || "").toString().trim();
 
-      if (!name || !description || !startDate || !endDate || !category || !status) {
+      if (!name || !description || !startDate || !endDate || !category) {
         this.showToast("Sila lengkapkan semua maklumat wajib.", "error");
         return;
       }
+      const startIso = new Date(startDate).toISOString();
+      const endIso = new Date(endDate).toISOString();
+      const status = this.getStatusLabelFromDates(startIso, endIso);
 
       const payload = {
         name,
         description,
-        startDate: new Date(startDate).toISOString(),
-        endDate: new Date(endDate).toISOString(),
+        startDate: startIso,
+        endDate: endIso,
         category,
         status,
         location,
@@ -1009,7 +1098,6 @@ export class ProgramKehadiranNewest {
     const startValue = this.formatDateForInput(program.tarikh_mula || program.startDate);
     const endValue = this.formatDateForInput(program.tarikh_tamat || program.endDate);
     const currentKategori = program.kategori || program.category || "Education";
-    const currentStatus = (program.status || this.resolveStatus(program).label || "Upcoming").toLowerCase();
     const currentTimeScale = (program.time_scale || program.timeScale || "").toLowerCase();
     const currentLocation = program.lokasi || program.location || "";
     const currentCoOrganizer = program.co_organizer || program.coOrganizer || "";
@@ -1043,20 +1131,9 @@ export class ProgramKehadiranNewest {
               <input id="program-newest-edit-end" name="endDate" type="date" class="form-input" value="${endValue}" required>
             </div>
           </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="program-newest-edit-category">Kategori</label>
-              <input id="program-newest-edit-category" name="category" type="text" class="form-input" value="${currentKategori}" required>
-            </div>
-            <div class="form-group">
-              <label for="program-newest-edit-status">Status</label>
-              <select id="program-newest-edit-status" name="status" class="form-input" required>
-                <option value="Upcoming" ${currentStatus === "upcoming" ? "selected" : ""}>Upcoming</option>
-                <option value="Active" ${currentStatus === "active" ? "selected" : ""}>Active</option>
-                <option value="Completed" ${currentStatus === "completed" ? "selected" : ""}>Completed</option>
-                <option value="Cancelled" ${currentStatus === "cancelled" ? "selected" : ""}>Cancelled</option>
-              </select>
-            </div>
+          <div class="form-group">
+            <label for="program-newest-edit-category">Kategori</label>
+            <input id="program-newest-edit-category" name="category" type="text" class="form-input" value="${currentKategori}" required>
           </div>
           <div class="form-row">
             <div class="form-group">
@@ -1144,22 +1221,24 @@ export class ProgramKehadiranNewest {
       const startDate = formData.get("startDate");
       const endDate = formData.get("endDate");
       const category = (formData.get("category") || "").toString();
-      const status = (formData.get("status") || "").toString();
       const location = (formData.get("location") || "").toString().trim();
       const timeScale = (formData.get("time_scale") || "").toString();
       const coOrganizer = (formData.get("co_organizer") || "").toString().trim();
       const expenses = (formData.get("expenses") || "").toString().trim();
 
-      if (!name || !description || !startDate || !endDate || !category || !status) {
+      if (!name || !description || !startDate || !endDate || !category) {
         this.showToast("Sila lengkapkan semua maklumat wajib.", "error");
         return;
       }
+      const startIso = new Date(startDate).toISOString();
+      const endIso = new Date(endDate).toISOString();
+      const status = this.getStatusLabelFromDates(startIso, endIso);
 
       const payload = {
         name,
         description,
-        startDate: new Date(startDate).toISOString(),
-        endDate: new Date(endDate).toISOString(),
+        startDate: startIso,
+        endDate: endIso,
         category,
         status,
         location,
@@ -1610,6 +1689,14 @@ export class ProgramKehadiranNewest {
     return { label, className };
   }
 
+  getStatusLabelFromDates(startDateIso, endDateIso) {
+    const statusMeta = this.resolveStatus({
+      startDate: startDateIso ? new Date(startDateIso) : null,
+      endDate: endDateIso ? new Date(endDateIso) : null
+    });
+    return statusMeta.label || 'Upcoming';
+  }
+
   showToast(message, type = 'info') {
     const toast = document.createElement('div');
     toast.className = `program-newest-toast ${type}`;
@@ -2024,6 +2111,46 @@ style.textContent = `
     gap: 12px;
     justify-content: space-between;
     align-items: center;
+  }
+
+  .program-status-tabs {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+
+  .program-status-tabs .status-tab {
+    border: 1px solid var(--warna-sempadan);
+    border-radius: 999px;
+    padding: 6px 14px;
+    background: #fff;
+    color: var(--warna-teks-utama);
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+  }
+
+  .program-status-tabs .status-tab .count {
+    background: #f1f5f9;
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 12px;
+    color: var(--warna-teks-sekunder);
+  }
+
+  .program-status-tabs .status-tab.active {
+    background: linear-gradient(135deg, var(--warna-utama), #8b5cf6);
+    color: #fff;
+    border-color: transparent;
+  }
+
+  .program-status-tabs .status-tab.active .count {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
   }
 
   .program-newest-wrapper .program-row-actions {
