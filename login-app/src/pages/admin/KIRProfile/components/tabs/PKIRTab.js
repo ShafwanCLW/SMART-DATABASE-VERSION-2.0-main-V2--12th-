@@ -77,6 +77,21 @@ export class PKIRTab extends BaseTab {
               <input type="tel" id="telefon_pasangan" name="telefon_pasangan">
             </div>
           </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="jenis_kenderaan_pasangan">Jenis Kenderaan</label>
+              <select id="jenis_kenderaan_pasangan" name="jenis_kenderaan">
+                <option value="Kereta Sendiri">Kereta Sendiri</option>
+                <option value="Moto">Moto</option>
+                <option value="Tiada" selected>Tiada</option>
+              </select>
+            </div>
+            <div class="form-group pkir-kenderaan-ansuran" style="display:none;">
+              <label for="ansuran_kenderaan_pasangan">Ansuran Kenderaan (RM)</label>
+              <input type="number" id="ansuran_kenderaan_pasangan" name="ansuran_kenderaan" min="0" step="0.01">
+            </div>
+          </div>
         </div>
 
         <!-- Maklumat Pendidikan Section -->
@@ -147,6 +162,11 @@ export class PKIRTab extends BaseTab {
                 <option value="Makan Gaji">Makan Gaji</option>
                 <option value="Bekerja Sendiri">Bekerja Sendiri</option>
               </select>
+            </div>
+
+            <div class="form-group">
+              <label for="nama_jenis_pekerjaan">Nama Jenis Pekerjaan</label>
+              <input type="text" id="nama_jenis_pekerjaan" name="nama_jenis_pekerjaan">
             </div>
           </div>
           
@@ -259,6 +279,7 @@ export class PKIRTab extends BaseTab {
     this.currentEditingId = null;
     this.toggleSmokingFields('');
     this.togglePekerjaanSendiri('');
+    this.toggleKenderaanAnsuran('');
 
     const submitBtn = form.querySelector('button[type="submit"]');
     if (submitBtn) {
@@ -302,6 +323,7 @@ export class PKIRTab extends BaseTab {
 
     this.togglePekerjaanSendiri(pkir.jenis_pekerjaan || '');
     this.toggleSmokingFields(pkir.status_merokok || '');
+    this.toggleKenderaanAnsuran(pkir.jenis_kenderaan || '');
 
     const submitBtn = form.querySelector('button[type="submit"]');
     if (submitBtn) {
@@ -353,6 +375,20 @@ export class PKIRTab extends BaseTab {
     const field = document.querySelector('.pekerjaan-sendiri');
     if (field) {
       field.style.display = value === 'Bekerja Sendiri' ? '' : 'none';
+    }
+  }
+
+  toggleKenderaanAnsuran(value) {
+    const group = document.querySelector('.pkir-kenderaan-ansuran');
+    if (group) {
+      const shouldShow = value && value !== 'Tiada';
+      group.style.display = shouldShow ? '' : 'none';
+      if (!shouldShow) {
+        const input = group.querySelector('input');
+        if (input) {
+          input.value = '';
+        }
+      }
     }
   }
 
@@ -553,6 +589,15 @@ export class PKIRTab extends BaseTab {
           this.applyBirthInfoFromIC(e.target.value, true);
         });
       }
+
+      const jenisKenderaanSelect = form.querySelector('#jenis_kenderaan_pasangan');
+      if (jenisKenderaanSelect) {
+        const toggleAnsuran = () => {
+          this.toggleKenderaanAnsuran(jenisKenderaanSelect.value);
+        };
+        jenisKenderaanSelect.addEventListener('change', toggleAnsuran);
+        toggleAnsuran();
+      }
       
       // Form change tracking
       form.addEventListener('input', () => {
@@ -592,6 +637,9 @@ export class PKIRTab extends BaseTab {
       return Number.isNaN(parsed) ? null : parsed;
     };
 
+    const jenisKenderaanValue = normalize(formData.jenis_kenderaan) || 'Tiada';
+    const ansuranKenderaanValue = jenisKenderaanValue === 'Tiada' ? '' : toNumber(formData.ansuran_kenderaan);
+
     const payload = {
       nama_pasangan: normalize(formData.nama_pasangan),
       no_kp_pasangan: normalizedIC,
@@ -606,6 +654,7 @@ export class PKIRTab extends BaseTab {
       tahun_tamat: normalize(formData.tahun_tamat),
       status_pekerjaan: normalize(formData.status_pekerjaan),
       jenis_pekerjaan: normalize(formData.jenis_pekerjaan),
+      nama_jenis_pekerjaan: normalize(formData.nama_jenis_pekerjaan),
       jenis_pekerjaan_sendiri: normalize(formData.jenis_pekerjaan_sendiri),
       nama_majikan: normalize(formData.nama_majikan),
       pendapatan_bulanan: toNumber(formData.pendapatan_bulanan),
@@ -615,6 +664,8 @@ export class PKIRTab extends BaseTab {
       ubat_tetap: normalize(formData.ubat_tetap),
       status_merokok: normalize(formData.status_merokok),
       bilangan_rokok: toNumber(formData.bilangan_rokok),
+      jenis_kenderaan: jenisKenderaanValue,
+      ansuran_kenderaan: ansuranKenderaanValue,
       asas: {
         nama: normalize(formData.nama_pasangan),
         no_kp: normalizedIC,
@@ -633,6 +684,7 @@ export class PKIRTab extends BaseTab {
       pekerjaan: {
         status: normalize(formData.status_pekerjaan),
         jenis: normalize(formData.jenis_pekerjaan),
+        nama_jenis_pekerjaan: normalize(formData.nama_jenis_pekerjaan),
         jenis_pekerjaan_sendiri: normalize(formData.jenis_pekerjaan_sendiri),
         majikan: normalize(formData.nama_majikan),
         pendapatan_bulanan: toNumber(formData.pendapatan_bulanan) ?? 0
@@ -696,6 +748,7 @@ export class PKIRTab extends BaseTab {
       tahun_tamat: pendidikan.tahun_tamat || record.tahun_tamat || '',
       status_pekerjaan: pekerjaan.status || record.status_pekerjaan || '',
       jenis_pekerjaan: pekerjaan.jenis || record.jenis_pekerjaan || '',
+      nama_jenis_pekerjaan: pekerjaan.nama_jenis_pekerjaan || record.nama_jenis_pekerjaan || '',
       jenis_pekerjaan_sendiri: pekerjaan.jenis_pekerjaan_sendiri || record.jenis_pekerjaan_sendiri || '',
       nama_majikan: pekerjaan.majikan || record.nama_majikan || '',
       pendapatan_bulanan: pekerjaan.pendapatan_bulanan ?? record.pendapatan_bulanan ?? '',
@@ -704,7 +757,9 @@ export class PKIRTab extends BaseTab {
       penyakit_kronik: this.formatListForDisplay(kesihatan.penyakit_kronik || record.penyakit_kronik),
       ubat_tetap: this.formatListForDisplay(kesihatan.ubat_tetap || record.ubat_tetap),
       status_merokok: kesihatan.status_merokok || record.status_merokok || '',
-      bilangan_rokok: kesihatan.bilangan_rokok ?? record.bilangan_rokok ?? ''
+      bilangan_rokok: kesihatan.bilangan_rokok ?? record.bilangan_rokok ?? '',
+      jenis_kenderaan: record.jenis_kenderaan || 'Tiada',
+      ansuran_kenderaan: record.ansuran_kenderaan ?? ''
     };
   }
 

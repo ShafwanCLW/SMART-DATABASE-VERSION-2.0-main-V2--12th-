@@ -747,7 +747,7 @@ export class KIRProfile {
           </div>
 
           <div class="form-group" id="bilangan_anak_group" style="${data.status_perkahwinan && data.status_perkahwinan !== 'Bujang' ? '' : 'display: none;'}">
-            <label for="bilangan_anak">Bilangan Anak</label>
+            <label for="bilangan_anak">Bilangan Anak dalam Tanggungan</label>
             <input type="number" id="bilangan_anak" name="bilangan_anak" value="${data.bilangan_anak || ''}" min="0">
           </div>
           
@@ -2746,6 +2746,80 @@ export class KIRProfile {
       statusPerkahwinan.addEventListener('change', toggleBilanganAnak);
       // Initial check
       toggleBilanganAnak();
+    }
+  }
+
+  updatePendapatanFromPekerjaan({ sumberPendapatanUtama, jumlahPendapatanUtama } = {}) {
+    if (!this.relatedData) {
+      this.relatedData = {};
+    }
+    const pendapatanData = { ...(this.relatedData.pendapatan || {}) };
+    let dataChanged = false;
+    let shouldMarkDirty = false;
+
+    if (sumberPendapatanUtama !== undefined) {
+      const normalizedSource = sumberPendapatanUtama || '';
+      const previousSource = pendapatanData.pendapatan_utama || '';
+      if (previousSource !== normalizedSource) {
+        pendapatanData.pendapatan_utama = normalizedSource;
+        dataChanged = true;
+        if (previousSource || normalizedSource) {
+          shouldMarkDirty = true;
+        }
+      }
+      this.reflectPendapatanInputValue('pendapatan_utama', normalizedSource);
+    }
+
+    if (jumlahPendapatanUtama !== undefined) {
+      const normalizedAmount = jumlahPendapatanUtama === null || jumlahPendapatanUtama === undefined || jumlahPendapatanUtama === ''
+        ? ''
+        : jumlahPendapatanUtama;
+      const previousAmount = pendapatanData.jumlah_pendapatan_utama ?? '';
+      if (previousAmount !== normalizedAmount) {
+        pendapatanData.jumlah_pendapatan_utama = normalizedAmount;
+        dataChanged = true;
+        if (previousAmount || normalizedAmount) {
+          shouldMarkDirty = true;
+        }
+      }
+      this.reflectPendapatanInputValue('jumlah_pendapatan_utama', normalizedAmount);
+    }
+
+    if (dataChanged) {
+      pendapatanData.jumlah_keseluruhan_pendapatan = this.calculatePendapatanTotalFromData(pendapatanData);
+      this.relatedData.pendapatan = { ...pendapatanData };
+      if (shouldMarkDirty) {
+        this.markTabDirty('pendapatan');
+      }
+      const totalDisplay = pendapatanData.jumlah_keseluruhan_pendapatan;
+      this.reflectPendapatanInputValue(
+        'jumlah_keseluruhan_pendapatan',
+        typeof totalDisplay === 'number' ? totalDisplay.toFixed(2) : (totalDisplay || '')
+      );
+    }
+
+    const pendapatanTab = this.tabComponents?.pendapatan;
+    if (pendapatanTab && typeof pendapatanTab.calculateAndUpdateTotal === 'function') {
+      pendapatanTab.calculateAndUpdateTotal();
+    }
+  }
+
+  calculatePendapatanTotalFromData(data = {}) {
+    const parseAmount = (value) => {
+      const parsed = parseFloat(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+    const total = parseAmount(data.jumlah_pendapatan_utama) +
+      parseAmount(data.jumlah_pendapatan_sampingan) +
+      parseAmount(data.jumlah_pendapatan_lain);
+    return total;
+  }
+
+  reflectPendapatanInputValue(fieldId, value) {
+    if (!fieldId) return;
+    const input = document.getElementById(fieldId);
+    if (input) {
+      input.value = value ?? '';
     }
   }
 

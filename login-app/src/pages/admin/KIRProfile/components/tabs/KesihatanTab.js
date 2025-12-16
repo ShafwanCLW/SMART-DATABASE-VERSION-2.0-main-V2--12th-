@@ -46,9 +46,9 @@ export class KesihatanTab extends BaseTab {
       this.createPembedahanSection(),
       // Bottom page actions: move Simpan Ringkasan Kesihatan button here
       `
-      <div class="page-actions">
+      <div class="form-actions">
         <button type="button" class="btn btn-primary" onclick="kesihatanTab.save()">
-          <i class="fas fa-save"></i> Simpan Ringkasan Kesihatan
+          <i class="fas fa-save"></i> Simpan
         </button>
       </div>
       `
@@ -60,6 +60,8 @@ export class KesihatanTab extends BaseTab {
   createRingkasanKesihatanSection() {
     const data = this.kirProfile.relatedData?.kesihatan || {};
     
+    const statusKesihatan = data.status_kesihatan || '';
+    const jenisKecacatan = data.jenis_kecacatan || '';
     const kumpulanDarah = data.kumpulan_darah || data.blood_type || '';
     const penyakitKronik = data.penyakit_kronik || data.chronic_diseases || [];
     const penyakitKronikLain = data.penyakit_kronik_lain || '';
@@ -71,6 +73,24 @@ export class KesihatanTab extends BaseTab {
         <div class="form-section">
           <h4>Ringkasan Kesihatan</h4>
           
+          <div class="form-row">
+            <div class="form-group">
+              <label for="status_kesihatan">Status Kesihatan</label>
+              <select id="status_kesihatan" name="status_kesihatan">
+                <option value="">Pilih Status</option>
+                <option value="Sihat" ${statusKesihatan === 'Sihat' ? 'selected' : ''}>Sihat</option>
+                <option value="Kurang Sihat" ${statusKesihatan === 'Kurang Sihat' ? 'selected' : ''}>Kurang Sihat</option>
+                <option value="Sakit Kronik" ${statusKesihatan === 'Sakit Kronik' ? 'selected' : ''}>Sakit Kronik</option>
+                <option value="OKU" ${statusKesihatan === 'OKU' ? 'selected' : ''}>OKU</option>
+              </select>
+            </div>
+
+            <div class="form-group jenis-kecacatan-group" style="${statusKesihatan === 'OKU' ? '' : 'display:none;'}">
+              <label for="jenis_kecacatan">Jenis Kecacatan</label>
+              <input type="text" id="jenis_kecacatan" name="jenis_kecacatan" value="${FormHelpers.escapeHtml(jenisKecacatan)}" placeholder="Nyatakan jenis kecacatan">
+            </div>
+          </div>
+
           <div class="form-row">
             <div class="form-group">
               <label for="kumpulan_darah">Kumpulan Darah</label>
@@ -831,6 +851,16 @@ export class KesihatanTab extends BaseTab {
         lainLainCheckbox.addEventListener('change', toggleLainLainInput);
         toggleLainLainInput();
       }
+
+      const statusKesihatanSelect = form.querySelector('#status_kesihatan');
+      const jenisKecacatanGroup = form.querySelector('.jenis-kecacatan-group');
+      if (statusKesihatanSelect && jenisKecacatanGroup) {
+        const toggleJenisKecacatan = () => {
+          jenisKecacatanGroup.style.display = statusKesihatanSelect.value === 'OKU' ? '' : 'none';
+        };
+        statusKesihatanSelect.addEventListener('change', toggleJenisKecacatan);
+        toggleJenisKecacatan();
+      }
     }
   }
 
@@ -988,8 +1018,12 @@ export class KesihatanTab extends BaseTab {
         penyakitKronik.push(checkbox.value);
       });
       const penyakitKronikLain = formData.get('penyakit_kronik_lain') || '';
+      const statusKesihatanValue = formData.get('status_kesihatan') || '';
+      const jenisKecacatanValue = statusKesihatanValue === 'OKU' ? (formData.get('jenis_kecacatan') || '') : '';
       
       sectionData = {
+        status_kesihatan: statusKesihatanValue,
+        jenis_kecacatan: jenisKecacatanValue,
         kumpulan_darah: formData.get('kumpulan_darah'),
         penyakit_kronik: penyakitKronik,
         penyakit_kronik_lain: penyakitKronik.includes('Lain-lain') ? penyakitKronikLain : '',

@@ -178,11 +178,13 @@ export class AIRTab extends BaseTab {
               <h4 class="section-title">Maklumat Kesihatan</h4>
               <div class="form-grid">
                 <div class="form-group">
-                  <label for="status_oku">Status OKU</label>
-                  <select id="status_oku" name="status_oku">
+                  <label for="status_kesihatan">Status Kesihatan</label>
+                  <select id="status_kesihatan" name="status_kesihatan">
                     <option value="">Pilih Status</option>
-                    <option value="Ya">Ya</option>
-                    <option value="Tidak">Tidak</option>
+                    <option value="Sihat">Sihat</option>
+                    <option value="Kurang Sihat">Kurang Sihat</option>
+                    <option value="Sakit Kronik">Sakit Kronik</option>
+                    <option value="OKU">OKU</option>
                   </select>
                 </div>
                 <div class="form-group oku-details" style="display:none;">
@@ -295,7 +297,8 @@ export class AIRTab extends BaseTab {
     setValue('nama_majikan', data.nama_majikan || '');
     setValue('alamat_majikan', data.alamat_majikan || '');
 
-    setValue('status_oku', data.status_oku || '');
+    const statusKesihatanValue = data.status_kesihatan || (data.status_oku === 'Ya' ? 'OKU' : '');
+    setValue('status_kesihatan', statusKesihatanValue);
     setValue('jenis_kecacatan', data.jenis_kecacatan || '');
 
     const smokingSelect = form.querySelector('[name="status_merokok"]');
@@ -330,7 +333,7 @@ export class AIRTab extends BaseTab {
     this.updateExamFormVisibility();
 
     this.toggleEmploymentSection(data.status || '');
-    this.toggleOkuFields(data.status_oku || '');
+    this.toggleOkuFields(statusKesihatanValue, form);
     this.toggleSmokingFields(data.status_merokok || '');
 
     const submitBtn = form.querySelector('button[type="submit"]');
@@ -481,7 +484,7 @@ export class AIRTab extends BaseTab {
         submitBtn.textContent = 'Simpan AIR';
       }
       this.toggleEmploymentSection('');
-      this.toggleOkuFields('');
+      this.toggleOkuFields('', form);
       this.toggleSmokingFields('');
     }
     this.formMode = 'create';
@@ -1080,6 +1083,9 @@ export class AIRTab extends BaseTab {
   createAIRKesihatanTab() {
     const data = this.currentAIR || {};
     const statusMerokok = data.status_merokok === 'Ya';
+    const statusKesihatan = data.status_kesihatan || '';
+    const showJenisKecacatan = statusKesihatan === 'OKU';
+    const jenisKecacatanValue = this.escapeHtml(data.jenis_kecacatan || '');
     
     return `
       <form class="air-form" data-drawer-tab="kesihatan">
@@ -1091,15 +1097,23 @@ export class AIRTab extends BaseTab {
               <label for="air_status_kesihatan">Status Kesihatan</label>
               <select id="air_status_kesihatan" name="status_kesihatan">
                 <option value="">Pilih Status</option>
-                <option value="Sihat" ${data.status_kesihatan === 'Sihat' ? 'selected' : ''}>Sihat</option>
-                <option value="Kurang Sihat" ${data.status_kesihatan === 'Kurang Sihat' ? 'selected' : ''}>Kurang Sihat</option>
-                <option value="Sakit Kronik" ${data.status_kesihatan === 'Sakit Kronik' ? 'selected' : ''}>Sakit Kronik</option>
+                <option value="Sihat" ${statusKesihatan === 'Sihat' ? 'selected' : ''}>Sihat</option>
+                <option value="Kurang Sihat" ${statusKesihatan === 'Kurang Sihat' ? 'selected' : ''}>Kurang Sihat</option>
+                <option value="Sakit Kronik" ${statusKesihatan === 'Sakit Kronik' ? 'selected' : ''}>Sakit Kronik</option>
+                <option value="OKU" ${statusKesihatan === 'OKU' ? 'selected' : ''}>OKU</option>
               </select>
             </div>
             
             <div class="form-group">
               <label for="air_diagnosis">Diagnosis</label>
               <input type="text" id="air_diagnosis" name="diagnosis" value="${data.diagnosis || ''}">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group oku-details" style="${showJenisKecacatan ? '' : 'display:none;'}">
+              <label for="air_jenis_kecacatan">Jenis Kecacatan</label>
+              <input type="text" id="air_jenis_kecacatan" name="jenis_kecacatan" value="${jenisKecacatanValue}">
             </div>
           </div>
           
@@ -1116,15 +1130,6 @@ export class AIRTab extends BaseTab {
           </div>
           
           <div class="form-row">
-            <div class="form-group">
-              <label for="air_oku">Status OKU</label>
-              <select id="air_oku" name="oku">
-                <option value="">Pilih Status</option>
-                <option value="Ya" ${data.oku === 'Ya' ? 'selected' : ''}>Ya</option>
-                <option value="Tidak" ${data.oku === 'Tidak' ? 'selected' : ''}>Tidak</option>
-              </select>
-            </div>
-            
             <div class="form-group">
               <label for="air_status_merokok">Status Merokok</label>
               <select id="air_status_merokok" name="status_merokok" onchange="airTab.toggleSmokingFields(this.value)">
@@ -1162,6 +1167,22 @@ export class AIRTab extends BaseTab {
     `;
   }
 
+  bindDrawerTabInteractions(tabId) {
+    if (!tabId) return;
+    const form = document.querySelector(`form[data-drawer-tab="${tabId}"]`);
+    if (!form) return;
+
+    if (tabId === 'kesihatan') {
+      const statusSelect = form.querySelector('[name="status_kesihatan"]');
+      if (statusSelect) {
+        statusSelect.addEventListener('change', (e) => {
+          this.toggleOkuFields(e.target.value, form);
+        });
+        this.toggleOkuFields(statusSelect.value, form);
+      }
+    }
+  }
+
   // AIR Event Handlers
   openAIRDrawer(airId = null) {
     // Validate that KIR ID is available
@@ -1186,6 +1207,7 @@ export class AIRTab extends BaseTab {
     if (tabContent) {
       tabContent.innerHTML = this.render();
       this.setupEventListeners();
+      this.bindDrawerTabInteractions(this.currentDrawerTab);
     }
   }
 
@@ -1215,6 +1237,7 @@ export class AIRTab extends BaseTab {
     if (drawerTabContent) {
       drawerTabContent.innerHTML = this.createDrawerTabContent();
     }
+    this.bindDrawerTabInteractions(tabId);
     
     // Update tab navigation
     const drawerTabs = document.querySelector('.drawer-tabs');
@@ -1282,6 +1305,13 @@ export class AIRTab extends BaseTab {
       }
     }
     
+    if (data.status_kesihatan) {
+      data.status_oku = data.status_kesihatan === 'OKU' ? 'Ya' : 'Tidak';
+      if (data.status_kesihatan !== 'OKU') {
+        data.jenis_kecacatan = '';
+      }
+    }
+    
     try {
       this.showDrawerSaveLoading(tabId);
       
@@ -1342,11 +1372,12 @@ export class AIRTab extends BaseTab {
     }
   }
 
-  toggleOkuFields(value) {
-    const okuGroup = document.querySelector('.oku-details');
-    if (okuGroup) {
-      okuGroup.style.display = value === 'Ya' ? '' : 'none';
-    }
+  toggleOkuFields(value, rootElement = null) {
+    const scope = rootElement || document;
+    const groups = scope.querySelectorAll('.oku-details');
+    groups.forEach(group => {
+      group.style.display = value === 'OKU' ? '' : 'none';
+    });
   }
 
   applyBirthInfoFromIC(icValue, clearOnInvalid = false) {
@@ -1432,6 +1463,12 @@ export class AIRTab extends BaseTab {
     const payload = { ...formData };
     payload.keputusan_exam_tahunan = this.currentExamResults || [];
     delete payload.sijil_lahir;
+    if (payload.status_kesihatan) {
+      payload.status_oku = payload.status_kesihatan === 'OKU' ? 'Ya' : 'Tidak';
+      if (payload.status_kesihatan !== 'OKU') {
+        payload.jenis_kecacatan = '';
+      }
+    }
     
     try {
       if (sijilLahirFile && sijilLahirFile.name) {
@@ -1704,10 +1741,10 @@ export class AIRTab extends BaseTab {
         });
       }
 
-      const okuSelect = form.querySelector('[name="status_oku"]');
-      if (okuSelect) {
-        okuSelect.addEventListener('change', (e) => {
-          this.toggleOkuFields(e.target.value);
+      const statusKesihatanSelect = form.querySelector('[name="status_kesihatan"]');
+      if (statusKesihatanSelect) {
+        statusKesihatanSelect.addEventListener('change', (e) => {
+          this.toggleOkuFields(e.target.value, form);
         });
       }
 

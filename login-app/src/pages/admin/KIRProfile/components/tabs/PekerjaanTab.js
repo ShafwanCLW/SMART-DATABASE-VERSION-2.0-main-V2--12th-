@@ -212,6 +212,28 @@ export class PekerjaanTab extends BaseTab {
       initializingStatus = false;
     }
 
+    const jenisInput = document.getElementById('jenis_pekerjaan');
+    if (jenisInput && this.kirProfile?.updatePendapatanFromPekerjaan) {
+      const syncJenis = () => {
+        this.kirProfile.updatePendapatanFromPekerjaan({
+          sumberPendapatanUtama: jenisInput.value || ''
+        });
+      };
+      jenisInput.addEventListener('input', syncJenis);
+      syncJenis();
+    }
+
+    const gajiInput = document.getElementById('gaji_bulanan');
+    if (gajiInput && this.kirProfile?.updatePendapatanFromPekerjaan) {
+      const syncGaji = () => {
+        this.kirProfile.updatePendapatanFromPekerjaan({
+          jumlahPendapatanUtama: gajiInput.value || ''
+        });
+      };
+      gajiInput.addEventListener('input', syncGaji);
+      syncGaji();
+    }
+
     // Expose tab instance for inline handlers
     window.pekerjaanTab = this;
   }
