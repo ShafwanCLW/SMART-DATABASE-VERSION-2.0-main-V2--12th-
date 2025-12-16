@@ -1,6 +1,7 @@
 // Standalone Program & Kehadiran (Modul Terkini) module
 // This module mirrors the original Program & Kehadiran tab but is self-contained.
 import { ProgramService } from '../../services/backend/ProgramService.js';
+import { ProgramMediaService } from '../../services/backend/ProgramMediaService.js';
 
 const STYLE_ID = 'program-kehadiran-newest-styles';
 
@@ -123,18 +124,20 @@ export class ProgramKehadiranNewest {
               <thead>
                 <tr>
                   <th>Nama Program</th>
+                  <th>Gambar</th>
                   <th>Kod Program</th>
                   <th>Penerangan</th>
                   <th>Tarikh Mula</th>
                   <th>Tarikh Tamat</th>
                   <th>Kategori</th>
+                  <th>Skala Masa</th>
                   <th>Status</th>
                   <th>Tindakan</th>
                 </tr>
               </thead>
               <tbody data-role="program-table-body">
                 <tr>
-                  <td colspan="7" class="placeholder-text">
+                  <td colspan="10" class="placeholder-text">
                     Klik "Masuk Modul" untuk memuatkan senarai program.
                   </td>
                 </tr>
@@ -388,6 +391,18 @@ export class ProgramKehadiranNewest {
     return 'one off';
   }
 
+  getProgramTimeScaleLabel(program) {
+    const scale = this.getProgramTimeScale(program);
+    const labels = {
+      'daily': 'Daily (berulang)',
+      'weekly': 'Weekly (berulang)',
+      'monthly': 'Monthly',
+      'berkala': 'Berkala',
+      'one off': 'One Off'
+    };
+    return labels[scale] || 'One Off';
+  }
+
   generateProgramCode(name = '') {
     const slug = (name || 'Program')
       .replace(/[^a-zA-Z0-9]+/g, '')
@@ -599,7 +614,7 @@ export class ProgramKehadiranNewest {
 
     target.innerHTML = `
       <tr>
-        <td colspan="7" class="loading-text">Memuatkan senarai program...</td>
+        <td colspan="10" class="loading-text">Memuatkan senarai program...</td>
       </tr>
     `;
 
@@ -610,7 +625,7 @@ export class ProgramKehadiranNewest {
       if (!programs || programs.length === 0) {
         target.innerHTML = `
           <tr>
-            <td colspan="7" class="placeholder-text">Tiada program direkodkan.</td>
+            <td colspan="10" class="placeholder-text">Tiada program direkodkan.</td>
           </tr>
         `;
         this.populateProgramFilter([]);
@@ -626,7 +641,7 @@ export class ProgramKehadiranNewest {
       console.error('ProgramKehadiranNewest: gagal memuat program', error);
       target.innerHTML = `
         <tr>
-          <td colspan="7" class="error-text">
+          <td colspan="10" class="error-text">
             ${error.message || 'Gagal memuat program.'}
           </td>
         </tr>
@@ -643,7 +658,7 @@ export class ProgramKehadiranNewest {
     if (!programs.length) {
       target.innerHTML = `
         <tr>
-          <td colspan="7" class="placeholder-text">Tiada program direkodkan.</td>
+          <td colspan="10" class="placeholder-text">Tiada program direkodkan.</td>
         </tr>
       `;
       return;
@@ -663,7 +678,7 @@ export class ProgramKehadiranNewest {
             : 'selesai';
       target.innerHTML = `
         <tr>
-          <td colspan="7" class="placeholder-text">Tiada program ${statusLabel} ditemui.</td>
+          <td colspan="10" class="placeholder-text">Tiada program ${statusLabel} ditemui.</td>
         </tr>
       `;
       this.updateProgramStatusTabs();
@@ -884,15 +899,28 @@ export class ProgramKehadiranNewest {
     const startDate = this.formatDate(program.tarikh_mula || program.startDate);
     const endDate = this.formatDate(program.tarikh_tamat || program.endDate);
     const status = this.resolveStatus(program);
+    const imageUrl = program.program_image_url || program.programImageUrl || '';
+    const sanitizedImageUrl = imageUrl ? this.escapeHtml(imageUrl) : '';
+    const programName = this.escapeHtml(program.nama_program || program.nama || 'Tidak dinyatakan');
 
     return `
       <tr data-program-id="${program.id}">
-        <td>${program.nama_program || program.nama || 'Tidak dinyatakan'}</td>
+        <td>${programName}</td>
+        <td>
+          <div class="program-photo-cell">
+            ${
+              imageUrl
+                ? `<img src="${sanitizedImageUrl}" alt="Foto ${programName}" />`
+                : '<div class="program-photo-placeholder">Tiada Gambar</div>'
+            }
+          </div>
+        </td>
         <td>${program.program_code || program.programCode || '-'}</td>
         <td>${program.penerangan || program.deskripsi || '-'}</td>
         <td>${startDate}</td>
         <td>${endDate}</td>
         <td>${program.kategori || '-'}</td>
+        <td>${this.getProgramTimeScaleLabel(program)}</td>
         <td>
             <span class="status-badge ${status.className}">${status.label}</span>
         </td>
@@ -969,6 +997,8 @@ export class ProgramKehadiranNewest {
     const expenseGrantName = program.expense_grant_name || program.expenseGrantName || '';
     const expenseDeductedAmount = program.expense_deducted_amount ?? program.expenseDeductedAmount ?? 0;
     const expenseGrantNotes = program.expense_grant_notes || program.expenseGrantNotes || '';
+    const programImageUrl = program.program_image_url || program.programImageUrl || '';
+    const escapedImageUrl = programImageUrl ? this.escapeHtml(programImageUrl) : '';
 
     const modal = document.createElement('div');
     modal.id = 'program-newest-details-modal';
@@ -978,6 +1008,13 @@ export class ProgramKehadiranNewest {
         <div class="modal-header">
           <h3>Butiran Program</h3>
           <button type="button" class="modal-close" data-action="close-modal">&times;</button>
+        </div>
+        <div class="program-details-media">
+          ${
+            programImageUrl
+              ? `<img src="${escapedImageUrl}" alt="Gambar ${this.escapeHtml(program.nama_program || program.nama || '')}" />`
+              : '<div class="program-photo-placeholder">Tiada gambar program.</div>'
+          }
         </div>
         <div class="program-details-grid">
           <div class="detail-item">
@@ -1166,6 +1203,21 @@ export class ProgramKehadiranNewest {
               <input id="program-newest-location" name="location" type="text" class="form-input" placeholder="Contoh: Dewan Komuniti">
             </div>
           </div>
+          <div class="form-group">
+            <label for="program-newest-image">Gambar Program (Pilihan)</label>
+            <div class="program-image-upload">
+              <div
+                class="program-image-preview"
+                data-role="program-image-preview"
+                data-context="create"
+                data-placeholder="Tiada gambar dipilih."
+              >
+                <span>Tiada gambar dipilih.</span>
+              </div>
+              <input id="program-newest-image" name="program_image" type="file" accept="image/*" class="form-input">
+              <small class="form-helper">Format JPG, PNG atau WEBP sehingga 5MB.</small>
+            </div>
+          </div>
           <div class="form-row">
             <div class="form-group">
               <label for="program-newest-co-organizer">Co-organizer (Pilihan)</label>
@@ -1219,11 +1271,17 @@ export class ProgramKehadiranNewest {
       modal
     });
     this.initializeRecurrenceControls({ modal });
+    this.initializeProgramImageUploader({
+      modal,
+      inputSelector: '#program-newest-image',
+      previewSelector: '[data-role="program-image-preview"][data-context="create"]'
+    });
   }
 
   closeCreateProgramModal() {
     const modal = document.getElementById("program-newest-create-modal");
     if (modal) {
+      this.cleanupProgramImagePreviews(modal);
       modal.classList.remove("visible");
       setTimeout(() => {
         if (modal.parentNode) {
@@ -1260,6 +1318,8 @@ export class ProgramKehadiranNewest {
       const expenseGrantNotes = (formData.get("expense_grant_notes") || "").toString().trim();
       const expensesRaw = formData.get("expenses");
       const expenseAmount = this.parseAmountInput(expensesRaw);
+      const imageInput = form.querySelector('#program-newest-image');
+      const imageFile = imageInput?.files && imageInput.files[0] ? imageInput.files[0] : null;
       const shouldDeduct = expenseGrantId && expenseAmount > 0;
 
       if (!name || !description || !startDate || !category) {
@@ -1309,6 +1369,8 @@ export class ProgramKehadiranNewest {
       const status = this.getStatusLabelFromDates(startIso, endIso, timeScale);
       const normalizedExpenses = expenseAmount > 0 ? expenseAmount : '';
 
+      let uploadedImageMeta = null;
+
       const payload = {
         name,
         description,
@@ -1326,6 +1388,21 @@ export class ProgramKehadiranNewest {
         recurrence_mode: usesRecurringFlow ? recurrenceMode : '',
         recurrence_end_date: usesRecurringFlow && recurrenceMode === "until" ? endIso : ''
       };
+
+      if (imageFile && imageFile.size > 0) {
+        try {
+          uploadedImageMeta = await ProgramMediaService.uploadProgramImage(imageFile, {
+            programCode: payload.program_code
+          });
+        } catch (imageError) {
+          console.error("ProgramKehadiranNewest: gagal memuat naik gambar program", imageError);
+          this.showToast(imageError.message || "Gagal memuat naik gambar program.", "error");
+          return;
+        }
+        payload.program_image_url = uploadedImageMeta.url;
+        payload.program_image_path = uploadedImageMeta.storagePath;
+        payload.program_image_name = uploadedImageMeta.originalName;
+      }
 
       let createdProgram = null;
       try {
@@ -1350,6 +1427,12 @@ export class ProgramKehadiranNewest {
           } catch (cleanupError) {
             console.warn("ProgramKehadiranNewest: gagal memadam program selepas ralat tolakan", cleanupError);
           }
+          if (createdProgram.program_image_path) {
+            await ProgramMediaService.deleteProgramImage(createdProgram.program_image_path);
+          }
+        }
+        if (!createdProgram?.id && uploadedImageMeta?.storagePath) {
+          await ProgramMediaService.deleteProgramImage(uploadedImageMeta.storagePath);
         }
         throw deductionError;
       }
@@ -1426,6 +1509,8 @@ export class ProgramKehadiranNewest {
     const expenseInputValue = parsedExpenseValue > 0 ? parsedExpenseValue : (currentExpenses || "");
     const currentExpenseGrantId = program.expense_grant_id || program.expenseGrantId || "";
     const currentExpenseGrantNotes = program.expense_grant_notes || program.expenseGrantNotes || "";
+    const programImageUrl = program.program_image_url || program.programImageUrl || "";
+    const escapedProgramImage = programImageUrl ? this.escapeHtml(programImageUrl) : "";
 
     await this.ensureFinancialGrants().catch(() => {});
 
@@ -1504,6 +1589,31 @@ export class ProgramKehadiranNewest {
               <input id="program-newest-edit-location" name="location" type="text" class="form-input" value="${currentLocation}">
             </div>
           </div>
+          <div class="form-group">
+            <label>Gambar Program</label>
+            <div class="program-image-upload">
+              <div
+                class="program-image-preview ${programImageUrl ? 'has-image' : ''}"
+                data-role="program-image-preview"
+                data-context="edit"
+                data-placeholder="Tiada gambar program."
+                ${programImageUrl ? `data-current-image="${escapedProgramImage}"` : ''}
+              >
+                ${
+                  programImageUrl
+                    ? `<img src="${escapedProgramImage}" alt="Gambar ${this.escapeHtml(program.nama_program || program.nama || '')}" />`
+                    : '<span>Tiada gambar program.</span>'
+                }
+              </div>
+              <input id="program-newest-edit-image" name="program_image" type="file" accept="image/*" class="form-input">
+              <small class="form-helper">Format JPG, PNG atau WEBP sehingga 5MB.</small>
+              ${
+                programImageUrl
+                  ? `<label class="remove-image-option"><input type="checkbox" name="remove_image" value="1"> Buang gambar sedia ada</label>`
+                  : ''
+              }
+            </div>
+          </div>
           <div class="form-row">
             <div class="form-group">
               <label for="program-newest-edit-co-organizer">Co-organizer (Pilihan)</label>
@@ -1558,11 +1668,18 @@ export class ProgramKehadiranNewest {
       selectedGrantId: currentExpenseGrantId
     });
     this.initializeRecurrenceControls({ modal });
+    this.initializeProgramImageUploader({
+      modal,
+      inputSelector: '#program-newest-edit-image',
+      previewSelector: '[data-role="program-image-preview"][data-context="edit"]',
+      removeSelector: 'input[name="remove_image"]'
+    });
   }
 
   closeSuntingProgramModal() {
     const modal = document.getElementById("program-newest-edit-modal");
     if (modal) {
+      this.cleanupProgramImagePreviews(modal);
       modal.classList.remove("visible");
       setTimeout(() => {
         if (modal.parentNode) {
@@ -1612,6 +1729,11 @@ export class ProgramKehadiranNewest {
       }
       const hasExistingGrantLink = this.programHasExpenseGrant(previousProgramMeta);
       const requiresGrantSync = shouldDeduct || hasExistingGrantLink;
+      const previousProgramImagePath = previousProgramMeta?.program_image_path || previousProgramMeta?.programImagePath || '';
+      const imageInput = form.querySelector('#program-newest-edit-image');
+      const newImageFile = imageInput?.files && imageInput.files[0] ? imageInput.files[0] : null;
+      const removeImage = Boolean(formData.get("remove_image"));
+      let uploadedImageMeta = null;
 
       const usesRecurringFlow = this.isRecurringScale(timeScale);
       const recurrenceMode = (formData.get("recurrence_mode") || "forever").toString();
@@ -1678,6 +1800,26 @@ export class ProgramKehadiranNewest {
         recurrence_end_date: usesRecurringFlow && recurrenceMode === "until" ? endIso : ''
       };
 
+      if (newImageFile && newImageFile.size > 0) {
+        try {
+          uploadedImageMeta = await ProgramMediaService.uploadProgramImage(newImageFile, {
+            programId,
+            programCode: previousProgramMeta?.program_code || previousProgramMeta?.programCode
+          });
+        } catch (imageError) {
+          console.error("ProgramKehadiranNewest: gagal memuat naik gambar program", imageError);
+          this.showToast(imageError.message || "Gagal memuat naik gambar program.", "error");
+          return;
+        }
+        payload.program_image_url = uploadedImageMeta.url;
+        payload.program_image_path = uploadedImageMeta.storagePath;
+        payload.program_image_name = uploadedImageMeta.originalName;
+      } else if (removeImage) {
+        payload.program_image_url = '';
+        payload.program_image_path = '';
+        payload.program_image_name = '';
+      }
+
       if (requiresGrantSync) {
         await this.reconcileProgramExpenseGrant({
           programId,
@@ -1690,6 +1832,11 @@ export class ProgramKehadiranNewest {
       }
 
       await ProgramService.updateProgram(programId, payload);
+      if (uploadedImageMeta && previousProgramImagePath) {
+        await ProgramMediaService.deleteProgramImage(previousProgramImagePath);
+      } else if (removeImage && previousProgramImagePath) {
+        await ProgramMediaService.deleteProgramImage(previousProgramImagePath);
+      }
       this.showToast("Program dikemas kini.", "success");
       this.closeSuntingProgramModal();
       await this.loadPrograms();
@@ -1714,8 +1861,21 @@ export class ProgramKehadiranNewest {
       return;
     }
 
+    let programMeta = this.state.programs.find(item => item.id === programId);
+    if (!programMeta) {
+      try {
+        programMeta = await ProgramService.getProgramById(programId);
+      } catch (error) {
+        console.warn("ProgramKehadiranNewest: gagal mendapatkan metadata program untuk dipadam", error);
+      }
+    }
+    const imagePath = programMeta?.program_image_path || programMeta?.programImagePath || '';
+
     try {
       await ProgramService.deleteProgram(programId);
+      if (imagePath) {
+        await ProgramMediaService.deleteProgramImage(imagePath);
+      }
       this.showToast("Program berjaya dipadam.", "success");
       await this.loadPrograms();
     } catch (error) {
@@ -2224,6 +2384,82 @@ export class ProgramKehadiranNewest {
     });
     timeScaleSelect.addEventListener('change', handleTimeScaleChange);
     handleTimeScaleChange();
+  }
+
+  initializeProgramImageUploader({ modal, inputSelector, previewSelector, removeSelector } = {}) {
+    if (!modal) return;
+    const input = inputSelector ? modal.querySelector(inputSelector) : null;
+    const preview = previewSelector ? modal.querySelector(previewSelector) : null;
+    if (!input || !preview) return;
+    const placeholder = preview.dataset.placeholder || 'Tiada gambar.';
+    const removeCheckbox = removeSelector ? modal.querySelector(removeSelector) : null;
+
+    const revokeTempUrl = () => {
+      if (preview.dataset.tempUrl) {
+        try {
+          URL.revokeObjectURL(preview.dataset.tempUrl);
+        } catch (error) {
+          console.warn('ProgramKehadiranNewest: gagal melepaskan URL sementara gambar', error);
+        }
+        delete preview.dataset.tempUrl;
+      }
+    };
+
+    const applyPlaceholder = () => {
+      const currentImage = preview.dataset.currentImage;
+      if (currentImage && (!removeCheckbox || !removeCheckbox.checked)) {
+        preview.innerHTML = `<img src="${currentImage}" alt="Gambar program" />`;
+        preview.classList.add('has-image');
+        preview.classList.remove('pending-remove');
+        return;
+      }
+      preview.innerHTML = `<span>${placeholder}</span>`;
+      preview.classList.remove('has-image');
+    };
+
+    input.addEventListener('change', () => {
+      const file = input.files && input.files[0];
+      revokeTempUrl();
+      if (file && file.size > 0) {
+        const url = URL.createObjectURL(file);
+        preview.innerHTML = `<img src="${url}" alt="Pratonton gambar program" />`;
+        preview.classList.add('has-image');
+        preview.classList.remove('pending-remove');
+        preview.dataset.tempUrl = url;
+        if (removeCheckbox) {
+          removeCheckbox.checked = false;
+        }
+      } else {
+        applyPlaceholder();
+      }
+    });
+
+    if (removeCheckbox) {
+      removeCheckbox.addEventListener('change', () => {
+        revokeTempUrl();
+        if (removeCheckbox.checked) {
+          preview.classList.remove('has-image');
+          preview.classList.add('pending-remove');
+          preview.innerHTML = `<span>${placeholder}</span>`;
+          input.value = '';
+        } else {
+          preview.classList.remove('pending-remove');
+          applyPlaceholder();
+        }
+      });
+    }
+  }
+
+  cleanupProgramImagePreviews(modal) {
+    if (!modal) return;
+    modal.querySelectorAll('[data-temp-url]').forEach(preview => {
+      try {
+        URL.revokeObjectURL(preview.dataset.tempUrl);
+      } catch (error) {
+        console.warn('ProgramKehadiranNewest: gagal membersihkan URL sementara', error);
+      }
+      delete preview.dataset.tempUrl;
+    });
   }
 
   async getIndexedParticipantCount(force = false) {
@@ -3081,6 +3317,33 @@ style.textContent = `
     border-bottom: 1px solid #edf2f7;
   }
 
+  .program-newest-wrapper .program-photo-cell {
+    width: 72px;
+    height: 56px;
+    border-radius: 12px;
+    background: #f8fafc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border: 1px dashed rgba(148, 163, 184, 0.5);
+  }
+
+  .program-newest-wrapper .program-photo-cell img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 10px;
+    display: block;
+  }
+
+  .program-newest-wrapper .program-photo-placeholder {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    text-align: center;
+    padding: 0 4px;
+  }
+
   .program-newest-wrapper .program-newest-section .data-table tbody tr:hover {
     background: #f8f7ff;
   }
@@ -3434,6 +3697,71 @@ style.textContent = `
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 14px;
     margin-bottom: 12px;
+  }
+
+  .program-newest-modal .program-details-media {
+    border-radius: 18px;
+    border: 1px dashed rgba(148, 163, 184, 0.6);
+    background: #f8fafc;
+    min-height: 200px;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .program-newest-modal .program-details-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .program-newest-modal .program-details-media .program-photo-placeholder {
+    font-size: 0.95rem;
+    color: #94a3b8;
+  }
+
+  .program-newest-modal .program-image-upload {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .program-newest-modal .program-image-preview {
+    border: 1px dashed rgba(148, 163, 184, 0.6);
+    border-radius: 16px;
+    min-height: 160px;
+    background: #f8fafc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+    text-align: center;
+    padding: 0.75rem;
+    overflow: hidden;
+  }
+
+  .program-newest-modal .program-image-preview.has-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .program-newest-modal .program-image-preview.pending-remove {
+    border-color: #fecaca;
+    background: #fff1f2;
+    color: #b91c1c;
+  }
+
+  .program-newest-modal .remove-image-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    color: #64748b;
   }
 
   .program-details-grid .detail-item {

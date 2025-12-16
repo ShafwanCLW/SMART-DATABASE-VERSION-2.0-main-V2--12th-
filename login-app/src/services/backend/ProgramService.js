@@ -111,6 +111,33 @@ const normalizeProgramPayload = (programData = {}, { includeDefaults = false } =
     data.time_scale = timeScale ?? '';
   }
 
+  const programImageUrl = pickFirst(
+    programData.program_image_url,
+    programData.programImageUrl,
+    programData.imageUrl
+  );
+  if (programImageUrl !== undefined || includeDefaults) {
+    data.program_image_url = programImageUrl ?? '';
+  }
+
+  const programImagePath = pickFirst(
+    programData.program_image_path,
+    programData.programImagePath,
+    programData.imagePath
+  );
+  if (programImagePath !== undefined || includeDefaults) {
+    data.program_image_path = programImagePath ?? '';
+  }
+
+  const programImageName = pickFirst(
+    programData.program_image_name,
+    programData.programImageName,
+    programData.imageName
+  );
+  if (programImageName !== undefined || includeDefaults) {
+    data.program_image_name = programImageName ?? '';
+  }
+
   const expenseGrantId = pickFirst(programData.expense_grant_id, programData.expenseGrantId);
   if (expenseGrantId !== undefined || includeDefaults) {
     data.expense_grant_id = expenseGrantId ?? '';

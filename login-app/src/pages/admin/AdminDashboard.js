@@ -31,40 +31,45 @@ export function createAdminSidebar(user) {
       </div>
       
       <nav class="sidebar-nav">
-        <a href="#" class="nav-item active" data-section="dashboard">
-          <span class="nav-icon">📊</span>
-          Dashboard
-        </a>
-        <a href="#" class="nav-item" data-section="user-management">
-          <span class="nav-icon">👥</span>
-          Pengurusan Pengguna
-        </a>
+        <div class="nav-main">
+          <a href="#" class="nav-item active" data-section="dashboard">
+            <span class="nav-icon">📊</span>
+            Dashboard
+          </a>
+          <a href="#" class="nav-item" data-section="user-management">
+            <span class="nav-icon">👥</span>
+            Pengurusan Pengguna
+          </a>
+          
+          <a href="#" class="nav-item" data-section="senarai-kir-new">
+            <span class="nav-icon">📋</span>
+            Senarai KIR
+          </a>
+         
+          <a href="#" class="nav-item" data-section="program-kehadiran-newest">
+            <span class="nav-icon">📅</span>
+            Program & Kehadiran
+          </a>
+          <a href="#" class="nav-item" data-section="reports">
+            <span class="nav-icon">📈</span>
+            Laporan
+          </a>
+          <a href="#" class="nav-item" data-section="settings">
+            <span class="nav-icon">⚙️</span>
+            Tetapan 
+          </a>
+          <a href="#" class="nav-item logout-nav-item" id="logoutBtn">
+            <span class="nav-icon">🚪</span>
+            Log Keluar
+          </a>
+        </div>
         
-        <a href="#" class="nav-item" data-section="senarai-kir-new">
-          <span class="nav-icon">📋</span>
-          Senarai KIR
-        </a>
-       
-        <a href="#" class="nav-item" data-section="program-kehadiran-newest">
-          <span class="nav-icon">📅</span>
-          Program & Kehadiran
-        </a>
-        <a href="#" class="nav-item" data-section="financial-tracking-newest">
-            <span class="nav-icon">💰</span>
-            Penjejakan Kewangan
-        </a>
-        <a href="#" class="nav-item" data-section="reports">
-          <span class="nav-icon">📈</span>
-          Laporan
-        </a>
-        <a href="#" class="nav-item" data-section="settings">
-          <span class="nav-icon">⚙️</span>
-          Tetapan 
-        </a>
-        <a href="#" class="nav-item logout-nav-item" id="logoutBtn">
-          <span class="nav-icon">🚪</span>
-          Log Keluar
-        </a>
+        <div class="nav-special">
+          <a href="#" class="nav-item nav-item-highlight" data-section="financial-tracking-newest">
+              <span class="nav-icon">💰</span>
+              Penjejakan Kewangan
+          </a>
+        </div>
       </nav>
     </aside>
   `;
@@ -9314,16 +9319,16 @@ function renderReportsDashboard({ programs = [], attendanceRecords = [], financi
     return status === 'upcoming';
   }).length;
   
-  const presentCount = attendanceRecords.filter(record => record.present).length;
-  const attendanceRate = attendanceRecords.length > 0
-    ? Math.round((presentCount / attendanceRecords.length) * 100)
-    : 0;
-  
   const uniqueParticipants = new Set();
   attendanceRecords.forEach(record => {
     const id = record.participant_id || record.participantId || record.no_kp_display || record.id;
     if (id) uniqueParticipants.add(id);
   });
+  const programMetrics = buildProgramMetrics(programs, attendanceRecords, participantSummary);
+  const averageAttendanceRatio = programMetrics.length
+    ? programMetrics.reduce((sum, metric) => sum + (metric.attendanceRatio || 0), 0) / programMetrics.length
+    : 0;
+  const attendanceRate = Math.round(averageAttendanceRatio * 100);
   
   updateElementText('report-total-programs', formatNumber(totalPrograms));
   updateElementText('report-program-meta', `${activePrograms} active • ${upcomingPrograms} upcoming`);
@@ -9341,7 +9346,6 @@ function renderReportsDashboard({ programs = [], attendanceRecords = [], financi
     surplusHelper.textContent = financialSummary.netBalance >= 0 ? 'Healthy surplus' : 'Deficit detected';
   }
   
-  const programMetrics = buildProgramMetrics(programs, attendanceRecords, participantSummary);
   updateElementText('report-program-summary', `${programMetrics.length} programs tracked`);
   renderReportsProgramTable(programMetrics);
   renderReportsTopParticipants(attendanceRecords);
@@ -9373,18 +9377,21 @@ function buildProgramMetrics(programs = [], attendanceRecords = [], participantS
   });
   
   const totalParticipants = participantSummary?.total ?? 0;
+  const capacityDenominator = totalParticipants > 0 ? totalParticipants : null;
   return programs.map(program => {
     const attendanceInfo = attendanceMap.get(program.id) || { total: 0, present: 0 };
     const startDate = normalizeToDate(program.tarikh_mula || program.startDate);
     const endDate = normalizeToDate(program.tarikh_tamat || program.endDate);
     const status = determineProgramStatus(program, startDate, endDate);
-    const denominator = totalParticipants || attendanceInfo.total || 0;
-    let attendanceRate = 0;
-    if (denominator > 0) {
-      attendanceRate = Math.round((attendanceInfo.present / denominator) * 100);
-      if (attendanceRate > 100) attendanceRate = 100;
-      if (attendanceRate < 0) attendanceRate = 0;
+    const programDenominator = capacityDenominator ?? attendanceInfo.total;
+    let attendanceRatio = 0;
+    if (programDenominator > 0) {
+      attendanceRatio = capacityDenominator
+        ? attendanceInfo.total / programDenominator
+        : attendanceInfo.present / programDenominator;
+      attendanceRatio = Math.min(Math.max(attendanceRatio, 0), 1);
     }
+    const attendanceRate = Math.round(attendanceRatio * 100);
     
     return {
       id: program.id,
@@ -9393,6 +9400,7 @@ function buildProgramMetrics(programs = [], attendanceRecords = [], participantS
       participants: totalParticipants || attendanceInfo.total,
       present: attendanceInfo.present,
       attendanceRate,
+      attendanceRatio,
       duration: calculateProgramDuration(program)
     };
   });

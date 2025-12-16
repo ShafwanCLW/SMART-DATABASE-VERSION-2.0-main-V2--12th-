@@ -15,7 +15,7 @@ import { PerbelanjaanTab } from './KIRProfile/components/tabs/PerbelanjaanTab.js
 import { BantuanBulananTab } from './KIRProfile/components/tabs/BantuanBulananTab.js';
 import { AIRTab } from './KIRProfile/components/tabs/AIRTab.js';
 import { PKIRTab } from './KIRProfile/components/tabs/PKIRTab.js';
-import { ProgramTab } from './KIRProfile/components/tabs/ProgramTab.js';
+import { ProgramParticipationTab } from './KIRProfile/components/tabs/ProgramParticipationTab.js';
 import { deriveBirthInfoFromIC, formatICWithDashes } from './KIRProfile/components/shared/icUtils.js';
 
 export class KIRProfile {
@@ -26,7 +26,7 @@ export class KIRProfile {
     this.currentTab = 'maklumat-asas';
     this.dirtyTabs = new Set();
     this.isLoading = false;
-    this.validTabs = ['maklumat-asas', 'kafa', 'pendidikan', 'pekerjaan', 'kekeluargaan', 'kesihatan', 'pendapatan', 'perbelanjaan', 'bantuan-bulanan', 'air', 'pkir', 'program'];
+    this.validTabs = ['maklumat-asas', 'kafa', 'pendidikan', 'pekerjaan', 'kekeluargaan', 'kesihatan', 'pendapatan', 'perbelanjaan', 'bantuan-bulanan', 'air', 'pkir', 'kehadiran-program'];
     
     // Initialize services
     this.kirService = KIRService;
@@ -73,7 +73,13 @@ export class KIRProfile {
     this.beforeUnloadHandler = null;
     this.currentHash = window.location.hash || '';
     this.isHandlingPopstate = false;
-    this.profilePhotoState = { uploading: false };
+    this.profilePhotoState = {
+      uploading: false,
+      pendingFile: null,
+      tempUrl: null
+    };
+    this.avatarAdjustModal = null;
+    this.photoPreviewModal = null;
   }
 
   applyOptions(options = {}) {
@@ -139,7 +145,7 @@ export class KIRProfile {
       'bantuan-bulanan': new BantuanBulananTab(this),
       'air': new AIRTab(this),
       'pkir': new PKIRTab(this),
-      'program': new ProgramTab(this)
+      'kehadiran-program': new ProgramParticipationTab(this)
     };
   }
 
@@ -421,6 +427,7 @@ export class KIRProfile {
       includeTime: true
     });
     const quickStats = this.renderQuickStats();
+    const hasProfilePhoto = Boolean(this.kirData?.gambar_profil_url);
     const showBackButton = this.allowNavigation !== false && (this.mode === 'admin' || typeof this.customBackHandler === 'function');
     const backButtonHTML = showBackButton ? `
           <button class="back-btn-modern" type="button" onclick="kirProfile.goBack()">
@@ -448,6 +455,12 @@ export class KIRProfile {
             <div class="profile-avatar-modern">
               ${this.renderProfileAvatar(initials)}
               <div class="avatar-status-indicator ${this.getStatusClass(this.kirData?.status_rekod)}"></div>
+              <div class="avatar-edit-bar">
+                <button type="button" class="avatar-edit-trigger" data-action="open-avatar-adjust" ${hasProfilePhoto ? '' : 'disabled'}>
+                  <i class="fas fa-pencil-alt"></i>
+                  Edit Foto
+                </button>
+              </div>
             </div>
             
             <div class="profile-info">
@@ -520,8 +533,8 @@ export class KIRProfile {
       const safeUrl = this.escapeHtml(photoUrl);
       const alt = this.escapeHtml(this.kirData?.nama_penuh || 'Gambar Profil');
       return `
-        <div class="avatar-circle-modern has-photo">
-          <img src="${safeUrl}" alt="${alt}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.remove();">
+        <div class="avatar-circle-modern has-photo" role="button" tabindex="0" data-action="preview-profile-photo">
+          <img src="${safeUrl}" alt="${alt}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;${this.buildAvatarImageStyle()}" onerror="this.remove();">
         </div>
       `;
     }
@@ -534,7 +547,7 @@ export class KIRProfile {
 
   // Create sidebar navigation
   createSidebarNavigation() {
-    const hiddenTabs = new Set(['program']);
+    const hiddenTabs = new Set();
     const tabs = [
       { id: 'maklumat-asas', label: 'Maklumat Asas', icon: 'fas fa-user' },
       { id: 'kafa', label: 'Pendidikan Agama (KAFA)', icon: 'fas fa-mosque' },
@@ -547,7 +560,7 @@ export class KIRProfile {
       { id: 'bantuan-bulanan', label: 'Bantuan Bulanan', icon: 'fas fa-hand-holding-usd' },
       { id: 'air', label: 'Ahli Isi Rumah (AIR)', icon: 'fas fa-home' },
       { id: 'pkir', label: 'PKIR (Pasangan Ketua Isi Rumah)', icon: 'fas fa-heart' },
-      { id: 'program', label: 'Program & Kehadiran', icon: 'fas fa-calendar-check' }
+      { id: 'kehadiran-program', label: 'Kehadiran Program', icon: 'fas fa-calendar-check' }
     ].filter(tab => !hiddenTabs.has(tab.id));
     
     const tabsHTML = tabs.map(tab => {
@@ -633,6 +646,9 @@ export class KIRProfile {
               <div class="profile-photo-controls">
                 <input type="file" id="gambar_profil" name="gambar_profil" accept="image/*" ${this.profilePhotoState.uploading ? 'disabled' : ''}>
                 <small class="form-help">PNG/JPG/WEBP sehingga 5MB.</small>
+                <button type="button" class="btn btn-primary btn-sm" data-action="upload-profile-photo" ${this.profilePhotoState.uploading || !this.profilePhotoState.pendingFile ? 'disabled' : ''}>
+                  Hantar Foto
+                </button>
                 <button type="button" class="btn btn-link text-danger" data-action="remove-profile-photo" style="${hasPhoto ? '' : 'display:none;'}">
                   Padam Foto
                 </button>
@@ -916,6 +932,457 @@ export class KIRProfile {
       removeInput.value = 'false';
     }
     this.updateDocumentPreviewFromData(docKey);
+  }
+
+  getProfilePhotoElements() {
+    return {
+      input: document.getElementById('gambar_profil'),
+      preview: document.getElementById('gambar_profil_preview'),
+      submitBtn: document.querySelector('[data-action="upload-profile-photo"]'),
+      removeBtn: document.querySelector('[data-action="remove-profile-photo"]'),
+      statusEl: document.getElementById('gambar_profil_status')
+    };
+  }
+
+  setProfilePhotoStatus(message = '', type = 'info') {
+    const { statusEl } = this.getProfilePhotoElements();
+    if (!statusEl) return;
+    if (!message) {
+      statusEl.style.display = 'none';
+      statusEl.textContent = '';
+      return;
+    }
+    statusEl.style.display = 'block';
+    statusEl.textContent = message;
+    const palette = {
+      error: '#dc2626',
+      success: '#16a34a',
+      info: '#475569'
+    };
+    statusEl.style.color = palette[type] || palette.info;
+  }
+
+  updateProfilePhotoSubmitState() {
+    const { submitBtn } = this.getProfilePhotoElements();
+    if (submitBtn) {
+      submitBtn.disabled = this.profilePhotoState.uploading || !this.profilePhotoState.pendingFile;
+      submitBtn.textContent = this.profilePhotoState.uploading ? 'Menghantar...' : 'Hantar Foto';
+    }
+  }
+
+  toggleProfilePhotoRemoveButton(visible) {
+    const { removeBtn } = this.getProfilePhotoElements();
+    if (removeBtn) {
+      removeBtn.style.display = visible ? '' : 'none';
+      removeBtn.disabled = this.profilePhotoState.uploading;
+    }
+  }
+
+  clearProfilePhotoTempUrl() {
+    if (this.profilePhotoState.tempUrl) {
+      try {
+        URL.revokeObjectURL(this.profilePhotoState.tempUrl);
+      } catch (error) {
+        console.warn('KIRProfile: gagal melepaskan URL gambar sementara', error);
+      }
+      this.profilePhotoState.tempUrl = null;
+    }
+  }
+
+  getAvatarTransformDefaults() {
+    return { offsetX: 50, offsetY: 50, scale: 1 };
+  }
+
+  getAvatarTransformValues() {
+    const defaults = this.getAvatarTransformDefaults();
+    return {
+      offsetX: Number.isFinite(Number(this.kirData?.gambar_profil_offset_x))
+        ? Number(this.kirData.gambar_profil_offset_x)
+        : defaults.offsetX,
+      offsetY: Number.isFinite(Number(this.kirData?.gambar_profil_offset_y))
+        ? Number(this.kirData.gambar_profil_offset_y)
+        : defaults.offsetY,
+      scale: Number.isFinite(Number(this.kirData?.gambar_profil_scale))
+        ? Number(this.kirData.gambar_profil_scale)
+        : defaults.scale
+    };
+  }
+
+  buildAvatarImageStyle(values = null) {
+    const transform = values || this.getAvatarTransformValues();
+    return `object-position:${transform.offsetX}% ${transform.offsetY}%;
+      transform: scale(${transform.scale});
+      transform-origin:center;`;
+  }
+
+  setProfilePhotoUploadingState(isUploading) {
+    this.profilePhotoState.uploading = isUploading;
+    const { input, removeBtn } = this.getProfilePhotoElements();
+    if (input) {
+      input.disabled = isUploading;
+    }
+    if (removeBtn) {
+      removeBtn.disabled = isUploading;
+    }
+    this.updateProfilePhotoSubmitState();
+  }
+
+  updateProfilePhotoPreviewFromData(urlOverride = null) {
+    const { preview } = this.getProfilePhotoElements();
+    if (!preview) return;
+    const url = urlOverride !== null ? urlOverride : (this.kirData?.gambar_profil_url || '');
+    if (url) {
+      preview.innerHTML = `<img src="${this.escapeHtml(url)}" alt="Gambar Profil" style="width:100%;height:100%;object-fit:cover;border-radius:1rem;${this.buildAvatarImageStyle()}">`;
+    } else {
+      preview.innerHTML = this.getProfilePhotoPlaceholderHTML();
+    }
+  }
+
+  getProfilePhotoElements() {
+    return {
+      input: document.getElementById('gambar_profil'),
+      preview: document.getElementById('gambar_profil_preview'),
+      submitBtn: document.querySelector('[data-action="upload-profile-photo"]'),
+      removeBtn: document.querySelector('[data-action="remove-profile-photo"]'),
+      statusEl: document.getElementById('gambar_profil_status')
+    };
+  }
+
+  setProfilePhotoStatus(message = '', type = 'info') {
+    const { statusEl } = this.getProfilePhotoElements();
+    if (!statusEl) return;
+    if (!message) {
+      statusEl.style.display = 'none';
+      statusEl.textContent = '';
+      return;
+    }
+    statusEl.style.display = 'block';
+    statusEl.textContent = message;
+    const palette = {
+      error: '#dc2626',
+      success: '#16a34a',
+      info: '#475569'
+    };
+    statusEl.style.color = palette[type] || palette.info;
+  }
+
+  updateProfilePhotoSubmitState() {
+    const { submitBtn } = this.getProfilePhotoElements();
+    if (submitBtn) {
+      submitBtn.disabled = this.profilePhotoState.uploading || !this.profilePhotoState.pendingFile;
+      submitBtn.textContent = this.profilePhotoState.uploading ? 'Menghantar...' : 'Hantar Foto';
+    }
+  }
+
+  toggleProfilePhotoRemoveButton(visible) {
+    const { removeBtn } = this.getProfilePhotoElements();
+    if (removeBtn) {
+      removeBtn.style.display = visible ? '' : 'none';
+      removeBtn.disabled = this.profilePhotoState.uploading;
+    }
+  }
+
+  clearProfilePhotoTempUrl() {
+    if (this.profilePhotoState.tempUrl) {
+      try {
+        URL.revokeObjectURL(this.profilePhotoState.tempUrl);
+      } catch (error) {
+        console.warn('KIRProfile: gagal melepaskan URL gambar sementara', error);
+      }
+      this.profilePhotoState.tempUrl = null;
+    }
+  }
+
+  setProfilePhotoUploadingState(isUploading) {
+    this.profilePhotoState.uploading = isUploading;
+    const { input, removeBtn } = this.getProfilePhotoElements();
+    if (input) {
+      input.disabled = isUploading;
+    }
+    if (removeBtn) {
+      removeBtn.disabled = isUploading;
+    }
+    this.updateProfilePhotoSubmitState();
+  }
+
+  updateProfilePhotoPreviewFromData(urlOverride = null) {
+    const { preview } = this.getProfilePhotoElements();
+    if (!preview) return;
+    const url = urlOverride !== null ? urlOverride : (this.kirData?.gambar_profil_url || '');
+    preview.innerHTML = url
+      ? `<img src="${this.escapeHtml(url)}" alt="Gambar Profil" style="width:100%;height:100%;object-fit:cover;border-radius:1rem;">`
+      : this.getProfilePhotoPlaceholderHTML();
+  }
+
+  handleProfilePhotoInput(input) {
+    if (!input) return;
+    const file = input.files && input.files[0];
+    if (!file) {
+      this.clearProfilePhotoTempUrl();
+      this.profilePhotoState.pendingFile = null;
+      this.updateProfilePhotoPreviewFromData();
+      this.setProfilePhotoStatus('');
+      this.updateProfilePhotoSubmitState();
+      if (!this.kirData?.gambar_profil_url) {
+        this.toggleProfilePhotoRemoveButton(false);
+      }
+      return;
+    }
+
+    try {
+      ProfilePhotoService.validateFile(file);
+    } catch (error) {
+      this.setProfilePhotoStatus(error.message || 'Format fail tidak disokong.', 'error');
+      input.value = '';
+      this.profilePhotoState.pendingFile = null;
+      this.updateProfilePhotoSubmitState();
+      return;
+    }
+
+    this.clearProfilePhotoTempUrl();
+    const tempUrl = URL.createObjectURL(file);
+    this.profilePhotoState.pendingFile = file;
+    this.profilePhotoState.tempUrl = tempUrl;
+    const { preview } = this.getProfilePhotoElements();
+    if (preview) {
+      preview.innerHTML = `<img src="${tempUrl}" alt="Pratonton Gambar" style="width:100%;height:100%;object-fit:cover;border-radius:1rem;">`;
+    }
+    this.setProfilePhotoStatus('Klik "Hantar Foto" untuk mengemas kini gambar.', 'info');
+    this.toggleProfilePhotoRemoveButton(true);
+    this.updateProfilePhotoSubmitState();
+  }
+
+  async handleProfilePhotoSubmit() {
+    const file = this.profilePhotoState.pendingFile;
+    if (!file) {
+      this.setProfilePhotoStatus('Sila pilih foto terlebih dahulu.', 'error');
+      return;
+    }
+    this.setProfilePhotoUploadingState(true);
+    try {
+      const uploadResult = await ProfilePhotoService.uploadProfilePhoto(this.kirId, file);
+      const timestamp = new Date().toISOString();
+      const defaults = this.getAvatarTransformDefaults();
+      const payload = {
+        gambar_profil_url: uploadResult.url,
+        gambar_profil_name: uploadResult.originalName,
+        gambar_profil_storage_path: uploadResult.storagePath,
+        gambar_profil_updated_at: timestamp,
+        gambar_profil_offset_x: defaults.offsetX,
+        gambar_profil_offset_y: defaults.offsetY,
+        gambar_profil_scale: defaults.scale
+      };
+      await KIRService.updateKIR(this.kirId, payload);
+      Object.assign(this.kirData, payload);
+      this.clearProfilePhotoTempUrl();
+      this.profilePhotoState.pendingFile = null;
+      const { input } = this.getProfilePhotoElements();
+      if (input) {
+        input.value = '';
+      }
+      this.updateProfilePhotoPreviewFromData(uploadResult.url);
+      this.toggleProfilePhotoRemoveButton(true);
+      this.setProfilePhotoStatus('Foto berjaya dikemas kini.', 'success');
+      await this.refreshHeaderData();
+    } catch (error) {
+      console.error('KIRProfile: gagal memuat naik foto', error);
+      this.setProfilePhotoStatus(error.message || 'Gagal memuat naik foto.', 'error');
+    } finally {
+      this.setProfilePhotoUploadingState(false);
+    }
+  }
+
+  async handleRemoveProfilePhoto() {
+    if (this.profilePhotoState.pendingFile) {
+      this.clearProfilePhotoTempUrl();
+      this.profilePhotoState.pendingFile = null;
+      const { input } = this.getProfilePhotoElements();
+      if (input) {
+        input.value = '';
+      }
+      this.updateProfilePhotoPreviewFromData();
+      this.updateProfilePhotoSubmitState();
+      if (!this.kirData?.gambar_profil_url) {
+        this.toggleProfilePhotoRemoveButton(false);
+      }
+      this.setProfilePhotoStatus('Pemilihan gambar dibatalkan.', 'info');
+      return;
+    }
+
+    if (!this.kirData?.gambar_profil_url) {
+      return;
+    }
+
+    const confirmed = window.confirm('Padam foto profil semasa?');
+    if (!confirmed) return;
+
+    this.setProfilePhotoUploadingState(true);
+    try {
+      const storagePath =
+        this.kirData?.gambar_profil_storage_path ||
+        this.kirData?.gambar_profil_storagePath ||
+        '';
+      if (storagePath) {
+        await ProfilePhotoService.deleteProfilePhoto(storagePath);
+      }
+      const defaults = this.getAvatarTransformDefaults();
+      const payload = {
+        gambar_profil_url: '',
+        gambar_profil_name: '',
+        gambar_profil_storage_path: '',
+        gambar_profil_updated_at: null,
+        gambar_profil_offset_x: defaults.offsetX,
+        gambar_profil_offset_y: defaults.offsetY,
+        gambar_profil_scale: defaults.scale
+      };
+      await KIRService.updateKIR(this.kirId, payload);
+      Object.assign(this.kirData, payload);
+      const { input } = this.getProfilePhotoElements();
+      if (input) {
+        input.value = '';
+      }
+      this.updateProfilePhotoPreviewFromData('');
+      this.toggleProfilePhotoRemoveButton(false);
+      this.setProfilePhotoStatus('Foto berjaya dipadam.', 'success');
+      await this.refreshHeaderData();
+    } catch (error) {
+      console.error('KIRProfile: gagal memadam foto', error);
+      this.setProfilePhotoStatus(error.message || 'Gagal memadam foto.', 'error');
+    } finally {
+      this.setProfilePhotoUploadingState(false);
+    }
+  }
+
+  openProfilePhotoPreview() {
+    if (!this.kirData?.gambar_profil_url) {
+      this.showToast('Tiada foto untuk dipaparkan.', 'info');
+      return;
+    }
+    this.closeProfilePhotoPreview();
+    const modal = document.createElement('div');
+    modal.className = 'kir-photo-preview-modal';
+    modal.innerHTML = `
+      <div class="kir-photo-preview-panel">
+        <button type="button" class="kir-modal-close" data-action="close-photo-preview">&times;</button>
+        <img src="${this.escapeHtml(this.kirData.gambar_profil_url)}" alt="${this.escapeHtml(this.kirData?.nama_penuh || 'Gambar Profil Penuh')}">
+      </div>
+    `;
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal || e.target.matches('[data-action="close-photo-preview"]')) {
+        this.closeProfilePhotoPreview();
+      }
+    });
+    document.body.appendChild(modal);
+    this.photoPreviewModal = modal;
+  }
+
+  closeProfilePhotoPreview() {
+    if (this.photoPreviewModal) {
+      this.photoPreviewModal.remove();
+      this.photoPreviewModal = null;
+    }
+  }
+
+  openAvatarAdjustModal() {
+    if (!this.kirData?.gambar_profil_url) {
+      this.showToast('Muat naik foto terlebih dahulu sebelum mengubah suai.', 'info');
+      return;
+    }
+    this.closeAvatarAdjustModal();
+    const values = this.getAvatarTransformValues();
+    const modal = document.createElement('div');
+    modal.className = 'kir-photo-adjust-modal';
+    modal.innerHTML = `
+      <div class="kir-photo-adjust-panel">
+        <div class="kir-photo-adjust-header">
+          <h3>Sesuaikan Kedudukan Foto</h3>
+          <button type="button" class="kir-modal-close" data-action="close-avatar-adjust">&times;</button>
+        </div>
+        <div class="kir-photo-adjust-body">
+          <div class="kir-photo-adjust-preview">
+            <div class="adjust-preview-frame">
+              <img src="${this.escapeHtml(this.kirData.gambar_profil_url)}" alt="Pratonton" data-role="avatar-adjust-preview" style="${this.buildAvatarImageStyle(values)}">
+            </div>
+          </div>
+          <div class="kir-photo-adjust-controls">
+            <label>
+              Posisi Mendatar
+              <input type="range" min="0" max="100" value="${values.offsetX}" data-role="avatar-offset-x">
+            </label>
+            <label>
+              Posisi Menegak
+              <input type="range" min="0" max="100" value="${values.offsetY}" data-role="avatar-offset-y">
+            </label>
+            <label>
+              Zum
+              <input type="range" min="100" max="200" value="${values.scale * 100}" data-role="avatar-scale">
+            </label>
+          </div>
+        </div>
+        <div class="kir-photo-adjust-actions">
+          <button type="button" class="btn btn-outline" data-action="close-avatar-adjust">Batal</button>
+          <button type="button" class="btn btn-primary" data-action="save-avatar-adjust">Simpan</button>
+        </div>
+      </div>
+    `;
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal || e.target.matches('[data-action="close-avatar-adjust"]')) {
+        this.closeAvatarAdjustModal();
+      }
+    });
+    document.body.appendChild(modal);
+    this.avatarAdjustModal = modal;
+    this.bindAvatarAdjustControls(modal, values);
+  }
+
+  bindAvatarAdjustControls(modal, values) {
+    const previewImg = modal.querySelector('[data-role="avatar-adjust-preview"]');
+    const state = { ...values };
+    const updatePreview = () => {
+      previewImg.style.objectPosition = `${state.offsetX}% ${state.offsetY}%`;
+      previewImg.style.transform = `scale(${state.scale})`;
+    };
+    modal.querySelector('[data-role="avatar-offset-x"]').addEventListener('input', (e) => {
+      state.offsetX = Number(e.target.value);
+      updatePreview();
+    });
+    modal.querySelector('[data-role="avatar-offset-y"]').addEventListener('input', (e) => {
+      state.offsetY = Number(e.target.value);
+      updatePreview();
+    });
+    modal.querySelector('[data-role="avatar-scale"]').addEventListener('input', (e) => {
+      state.scale = Number(e.target.value) / 100;
+      updatePreview();
+    });
+    modal.querySelector('[data-action="save-avatar-adjust"]').addEventListener('click', async () => {
+      await this.saveAvatarAdjustments(state);
+    });
+  }
+
+  async saveAvatarAdjustments(values) {
+    try {
+      const payload = {
+        gambar_profil_offset_x: Math.min(100, Math.max(0, values.offsetX)),
+        gambar_profil_offset_y: Math.min(100, Math.max(0, values.offsetY)),
+        gambar_profil_scale: Math.max(1, Math.min(2, values.scale))
+      };
+      await KIRService.updateKIR(this.kirId, payload);
+      Object.assign(this.kirData, payload);
+      this.updateProfilePhotoPreviewFromData();
+      await this.refreshHeaderData();
+      this.showToast('Kedudukan foto dikemas kini.', 'success');
+      this.closeAvatarAdjustModal();
+    } catch (error) {
+      console.error('KIRProfile: gagal menyimpan pelarasan gambar', error);
+      this.showToast(error.message || 'Gagal menyimpan pelarasan foto.', 'error');
+    }
+  }
+
+  closeAvatarAdjustModal() {
+    if (this.avatarAdjustModal) {
+      this.avatarAdjustModal.remove();
+      this.avatarAdjustModal = null;
+    }
   }
 
 
@@ -2211,6 +2678,24 @@ export class KIRProfile {
       if (removeBtn) {
         e.preventDefault();
         this.handleRemoveProfilePhoto();
+        return;
+      }
+      const uploadBtn = e.target.closest('[data-action="upload-profile-photo"]');
+      if (uploadBtn) {
+        e.preventDefault();
+        this.handleProfilePhotoSubmit();
+        return;
+      }
+      const previewTrigger = e.target.closest('[data-action="preview-profile-photo"]');
+      if (previewTrigger) {
+        e.preventDefault();
+        this.openProfilePhotoPreview();
+        return;
+      }
+      const adjustBtn = e.target.closest('[data-action="open-avatar-adjust"]');
+      if (adjustBtn) {
+        e.preventDefault();
+        this.openAvatarAdjustModal();
       }
     });
 
@@ -2616,11 +3101,14 @@ export class KIRProfile {
       const updatedData = await KIRService.getKIRById(this.kirId);
       if (updatedData) {
         this.kirData = updatedData;
-        
-        // Update header
-        const header = document.querySelector('.kir-profile-header');
-        if (header) {
-          header.innerHTML = this.createHeader().replace('<div class="kir-profile-header">', '').replace('</div>', '');
+        const headerModern = document.querySelector('.kir-profile-header-modern');
+        if (headerModern) {
+          const temp = document.createElement('div');
+          temp.innerHTML = this.createHeader();
+          const newHeader = temp.firstElementChild;
+          if (newHeader) {
+            headerModern.replaceWith(newHeader);
+          }
         }
       }
     } catch (error) {
