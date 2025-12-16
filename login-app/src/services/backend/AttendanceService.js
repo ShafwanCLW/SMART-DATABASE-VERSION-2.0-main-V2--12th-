@@ -61,10 +61,12 @@ export async function recordAttendance({ programId, no_kp, recordDate }) {
   return { id: attendanceId, ...payload };
 }
 
-export async function listAttendanceByProgram(programId, date) {
+export async function listAttendanceByProgram(programId, date, options = {}) {
+  const { endDate = null } = options || {};
   const constraints = [where('program_id', '==', programId), createEnvFilter()];
   const snap = await getDocs(query(collection(db, COLLECTIONS.KEHADIRAN_PROGRAM), ...constraints));
-  const dateKey = date ? formatDateKey(date) : null;
+  const startKey = date ? formatDateKey(date) : null;
+  const endKey = endDate ? formatDateKey(endDate) : null;
   return snap.docs
     .map(d => {
       const data = d.data();
@@ -72,8 +74,17 @@ export async function listAttendanceByProgram(programId, date) {
       return { id: d.id, ...data, record_date: recordDate };
     })
     .filter(record => {
-      if (!dateKey) return true;
-      return record.record_date === dateKey;
+      if (!startKey && !endKey) {
+        return true;
+      }
+      const recordKey = record.record_date || '';
+      if (startKey && endKey) {
+        return recordKey >= startKey && recordKey <= endKey;
+      }
+      if (startKey) {
+        return recordKey === startKey;
+      }
+      return recordKey <= endKey;
     });
 }
 

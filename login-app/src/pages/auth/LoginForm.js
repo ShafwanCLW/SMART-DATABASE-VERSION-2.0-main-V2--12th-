@@ -47,7 +47,7 @@ export function createLoginForm() {
         <div class="demo-credentials" id="demo-section">
           <h3>Quick Demo Login:</h3>
           <div class="demo-buttons">
-            <button type="button" class="demo-btn user-demo" data-email="user@example.com" data-password="user123" data-role="user">
+            <button type="button" class="demo-btn user-demo" data-email="unknownmr5853@gmail.com" data-password="123123" data-role="user">
               <span class="demo-icon">👤</span>
               <div class="demo-text">
                 <strong>Login as User</strong>

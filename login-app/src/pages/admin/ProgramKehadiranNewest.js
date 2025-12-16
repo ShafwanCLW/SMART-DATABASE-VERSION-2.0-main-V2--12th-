@@ -21,7 +21,9 @@ export class ProgramKehadiranNewest {
       programStatusFilter: 'active',
       financialGrants: [],
       financialGrantsLoaded: false,
-      financialGrantsLoading: false
+      financialGrantsLoading: false,
+      participantIndexCount: null,
+      participantIndexCountLoading: false
     };
   }
 
@@ -121,6 +123,7 @@ export class ProgramKehadiranNewest {
               <thead>
                 <tr>
                   <th>Nama Program</th>
+                  <th>Kod Program</th>
                   <th>Penerangan</th>
                   <th>Tarikh Mula</th>
                   <th>Tarikh Tamat</th>
@@ -144,9 +147,6 @@ export class ProgramKehadiranNewest {
         <div class="section-card">
           <div class="section-header">
             
-            <div class="section-header-actions">
-              <button class="btn btn-ghost" data-action="export-attendance">&#8681; Export</button>
-            </div>
           </div>
 
           <div class="attendance-program-list" data-role="attendance-program-list"></div>
@@ -337,8 +337,6 @@ export class ProgramKehadiranNewest {
   }
 
   bindAttendanceActions() {
-    const exportBtn = this.root.querySelector('[data-action="export-attendance"]');
-
     if (this.elements.attendanceSearch) {
       this.elements.attendanceSearch.addEventListener('input', () => {
         this.state.filters.search = this.elements.attendanceSearch.value || '';
@@ -364,9 +362,6 @@ export class ProgramKehadiranNewest {
       this.elements.attendanceNextBtn.addEventListener('click', () => this.shiftAttendanceDate(1));
     }
 
-    if (exportBtn) {
-      exportBtn.addEventListener('click', () => this.exportAttendance());
-    }
   }
 
   bindReportActions() {
@@ -379,6 +374,11 @@ export class ProgramKehadiranNewest {
     return (this.state.programs || []).find(program => program.id === programId) || null;
   }
 
+  isRecurringScale(scaleValue) {
+    const normalized = (scaleValue || '').toString().trim().toLowerCase();
+    return normalized === 'daily' || normalized === 'weekly';
+  }
+
   getProgramTimeScale(program) {
     const scale = (program?.time_scale || program?.timeScale || '').toLowerCase();
     const allowed = ['one off', 'one-off', 'daily', 'weekly', 'monthly', 'berkala'];
@@ -388,9 +388,36 @@ export class ProgramKehadiranNewest {
     return 'one off';
   }
 
+  generateProgramCode(name = '') {
+    const slug = (name || 'Program')
+      .replace(/[^a-zA-Z0-9]+/g, '')
+      .toUpperCase()
+      .slice(0, 4)
+      .padEnd(3, 'X');
+    const unique = Date.now().toString(36).slice(-4).toUpperCase();
+    return `${slug}-${unique}`;
+  }
+
   normalizeDateValue(value) {
     if (!value) return '';
-    const date = new Date(value);
+    let date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      if (typeof value === 'string' && value.includes('/')) {
+        const parts = value.split(/[\\/]/).map(part => part.trim());
+        if (parts.length === 3) {
+          let [day, month, year] = parts;
+          if (year.length === 2) {
+            year = `20${year}`;
+          }
+          if (day.length === 4 && year.length === 2) {
+            [year, day] = [day, year];
+          }
+          const isDayFirst = Number(day) > 12;
+          const iso = isDayFirst ? `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}` : `${year}-${day.padStart(2, '0')}-${month.padStart(2, '0')}`;
+          date = new Date(iso);
+        }
+      }
+    }
     if (Number.isNaN(date.getTime())) return '';
     return date.toISOString().split('T')[0];
   }
@@ -456,13 +483,43 @@ export class ProgramKehadiranNewest {
     return date.toISOString().split('T')[0];
   }
 
+  startOfWeek(dateValue) {
+    const date = new Date(dateValue);
+    if (Number.isNaN(date.getTime())) return this.getToday();
+    const diff = (date.getDay() + 6) % 7; // Monday as start of week
+    date.setDate(date.getDate() - diff);
+    return date.toISOString().split('T')[0];
+  }
+
+  getAttendanceDateRange() {
+    const baseDate = this.state.filters.attendanceDate || this.getToday();
+    const program = this.getSelectedProgram();
+    const scale = this.getProgramTimeScale(program);
+    if (scale === 'weekly') {
+      const start = this.startOfWeek(baseDate);
+      const end = this.shiftDateByDays(start, 6);
+      return { start, end, scale };
+    }
+    return { start: baseDate, end: baseDate, scale };
+  }
+
+  formatAttendanceRangeLabel(range) {
+    if (!range) {
+      return this.formatDateForDisplay(this.state.filters.attendanceDate || this.getToday());
+    }
+    const { start, end } = range;
+    if (start === end) {
+      return this.formatDateForDisplay(start);
+    }
+    return `${this.formatDateForDisplay(start)} - ${this.formatDateForDisplay(end)}`;
+  }
+
   updateAttendanceDateUI() {
     if (this.elements.attendanceDateInput) {
       this.elements.attendanceDateInput.value = this.state.filters.attendanceDate || this.getToday();
     }
     if (this.elements.attendanceDateHelper) {
-      const program = this.getSelectedProgram();
-      const scale = program ? this.getProgramTimeScale(program) : 'one off';
+      const range = this.getAttendanceDateRange();
       const labelMap = {
         'one off': 'One Off',
         daily: 'Daily',
@@ -470,8 +527,8 @@ export class ProgramKehadiranNewest {
         monthly: 'Monthly',
         berkala: 'Berkala'
       };
-      const dateText = this.formatDateForDisplay(this.state.filters.attendanceDate || this.getToday());
-      this.elements.attendanceDateHelper.textContent = `${labelMap[scale] || 'One Off'} • ${dateText}`;
+      const dateText = this.formatAttendanceRangeLabel(range);
+      this.elements.attendanceDateHelper.textContent = `${labelMap[range.scale] || 'One Off'} • ${dateText}`;
     }
   }
 
@@ -831,6 +888,7 @@ export class ProgramKehadiranNewest {
     return `
       <tr data-program-id="${program.id}">
         <td>${program.nama_program || program.nama || 'Tidak dinyatakan'}</td>
+        <td>${program.program_code || program.programCode || '-'}</td>
         <td>${program.penerangan || program.deskripsi || '-'}</td>
         <td>${startDate}</td>
         <td>${endDate}</td>
@@ -1062,32 +1120,47 @@ export class ProgramKehadiranNewest {
             <label for="program-newest-description">Penerangan</label>
             <textarea id="program-newest-description" name="description" class="form-input" rows="3" required></textarea>
           </div>
+          <div class="form-group">
+            <label for="program-newest-time-scale">Skala Masa</label>
+              <select id="program-newest-time-scale" name="time_scale" class="form-input">
+                <option value="">Pilih skala masa</option>
+                <option value="One Off">One Off (bukan berulang)</option>
+                <option value="Daily">Daily (berulang automatik)</option>
+                <option value="Weekly">Weekly (berulang automatik)</option>
+                <option value="Monthly">Monthly (cipta baharu setiap kali)</option>
+                <option value="Berkala">Berkala (cipta baharu setiap kali)</option>
+              </select>
+              <small class="form-helper">Daily & Weekly akan berjalan berulang secara automatik. Pilihan lain memerlukan penciptaan program baharu setiap kali.</small>
+            </div>
           <div class="form-row">
             <div class="form-group">
               <label for="program-newest-start">Tarikh Mula</label>
               <input id="program-newest-start" name="startDate" type="date" class="form-input" required>
             </div>
-            <div class="form-group">
+            <div class="form-group" data-role="end-date-group">
               <label for="program-newest-end">Tarikh Tamat</label>
               <input id="program-newest-end" name="endDate" type="date" class="form-input" required>
             </div>
+          </div>
+          <div class="form-group recurrence-control" data-role="recurrence-group" hidden>
+            <label>Tempoh Berulang</label>
+            <div class="recurrence-options">
+              <label class="recurrence-option">
+                <input type="radio" name="recurrence_mode" value="forever" checked>
+                Berterusan
+              </label>
+              <label class="recurrence-option">
+                <input type="radio" name="recurrence_mode" value="until">
+                Ada tarikh tamat
+              </label>
+            </div>
+            <small class="form-helper">Pilih "Ada tarikh tamat" jika pengulangan perlu dihentikan pada tarikh tertentu.</small>
           </div>
           <div class="form-group">
             <label for="program-newest-category">Kategori</label>
             <input id="program-newest-category" name="category" type="text" class="form-input" placeholder="Contoh: Pendidikan" required>
           </div>
           <div class="form-row">
-            <div class="form-group">
-              <label for="program-newest-time-scale">Skala Masa</label>
-              <select id="program-newest-time-scale" name="time_scale" class="form-input">
-                <option value="">Pilih skala masa</option>
-                <option value="One Off">One Off</option>
-                <option value="Daily">Daily</option>
-                <option value="Weekly">Weekly</option>
-                <option value="Monthly">Monthly</option>
-                <option value="Berkala">Berkala</option>
-              </select>
-            </div>
             <div class="form-group">
               <label for="program-newest-location">Lokasi (Pilihan)</label>
               <input id="program-newest-location" name="location" type="text" class="form-input" placeholder="Contoh: Dewan Komuniti">
@@ -1145,6 +1218,7 @@ export class ProgramKehadiranNewest {
       scope: 'create',
       modal
     });
+    this.initializeRecurrenceControls({ modal });
   }
 
   closeCreateProgramModal() {
@@ -1188,7 +1262,7 @@ export class ProgramKehadiranNewest {
       const expenseAmount = this.parseAmountInput(expensesRaw);
       const shouldDeduct = expenseGrantId && expenseAmount > 0;
 
-      if (!name || !description || !startDate || !endDate || !category) {
+      if (!name || !description || !startDate || !category) {
         this.showToast("Sila lengkapkan semua maklumat wajib.", "error");
         return;
       }
@@ -1211,9 +1285,28 @@ export class ProgramKehadiranNewest {
         }
       }
 
+      const usesRecurringFlow = this.isRecurringScale(timeScale);
+      const recurrenceMode = (formData.get("recurrence_mode") || "forever").toString();
+
+      if (!usesRecurringFlow && !endDate) {
+        this.showToast("Tarikh tamat diperlukan untuk pilihan ini.", "error");
+        return;
+      }
+      if (usesRecurringFlow && recurrenceMode === "until" && !endDate) {
+        this.showToast("Sila pilih tarikh tamat untuk pengulangan.", "error");
+        return;
+      }
+
       const startIso = new Date(startDate).toISOString();
-      const endIso = new Date(endDate).toISOString();
-      const status = this.getStatusLabelFromDates(startIso, endIso);
+      let endIso = "";
+      if (usesRecurringFlow) {
+        if (recurrenceMode === "until") {
+          endIso = new Date(endDate).toISOString();
+        }
+      } else {
+        endIso = new Date(endDate).toISOString();
+      }
+      const status = this.getStatusLabelFromDates(startIso, endIso, timeScale);
       const normalizedExpenses = expenseAmount > 0 ? expenseAmount : '';
 
       const payload = {
@@ -1228,7 +1321,10 @@ export class ProgramKehadiranNewest {
         co_organizer: coOrganizer,
         expenses: normalizedExpenses,
         expense_grant_notes: expenseGrantNotes,
-        expense_grant_id: shouldDeduct ? expenseGrantId : ''
+        expense_grant_id: shouldDeduct ? expenseGrantId : '',
+        program_code: this.generateProgramCode(name),
+        recurrence_mode: usesRecurringFlow ? recurrenceMode : '',
+        recurrence_end_date: usesRecurringFlow && recurrenceMode === "until" ? endIso : ''
       };
 
       let createdProgram = null;
@@ -1333,6 +1429,17 @@ export class ProgramKehadiranNewest {
 
     await this.ensureFinancialGrants().catch(() => {});
 
+    const usesRecurringScale = currentTimeScale === "daily" || currentTimeScale === "weekly";
+    let recurrenceModePreset = (program.recurrence_mode || program.recurrenceMode || "").toLowerCase();
+    const recurrenceEndRaw = program.recurrence_end_date || program.recurrenceEndDate || program.tarikh_tamat || program.endDate;
+    const recurrenceEndValue = this.formatDateForInput(recurrenceEndRaw);
+    if (!recurrenceModePreset && usesRecurringScale && recurrenceEndValue) {
+      recurrenceModePreset = "until";
+    }
+    if (!recurrenceModePreset) {
+      recurrenceModePreset = "forever";
+    }
+
     const modal = document.createElement("div");
     modal.id = "program-newest-edit-modal";
     modal.className = "program-newest-modal";
@@ -1351,32 +1458,47 @@ export class ProgramKehadiranNewest {
             <label for="program-newest-edit-description">Penerangan</label>
             <textarea id="program-newest-edit-description" name="description" class="form-input" rows="3" required>${program.penerangan || program.deskripsi || ""}</textarea>
           </div>
+          <div class="form-group">
+            <label for="program-newest-edit-time-scale">Skala Masa</label>
+              <select id="program-newest-edit-time-scale" name="time_scale" class="form-input">
+                <option value="" ${currentTimeScale === "" ? "selected" : ""}>Pilih skala masa</option>
+                <option value="One Off" ${currentTimeScale === "one off" ? "selected" : ""}>One Off (bukan berulang)</option>
+                <option value="Daily" ${currentTimeScale === "daily" ? "selected" : ""}>Daily (berulang automatik)</option>
+                <option value="Weekly" ${currentTimeScale === "weekly" ? "selected" : ""}>Weekly (berulang automatik)</option>
+                <option value="Monthly" ${currentTimeScale === "monthly" ? "selected" : ""}>Monthly (cipta baharu setiap kali)</option>
+                <option value="Berkala" ${currentTimeScale === "berkala" ? "selected" : ""}>Berkala (cipta baharu setiap kali)</option>
+              </select>
+              <small class="form-helper">Daily & Weekly akan kekal berulang secara automatik. Pilihan lain perlu dicipta semula apabila mahu dijalankan.</small>
+            </div>
           <div class="form-row">
             <div class="form-group">
               <label for="program-newest-edit-start">Tarikh Mula</label>
               <input id="program-newest-edit-start" name="startDate" type="date" class="form-input" value="${startValue}" required>
             </div>
-            <div class="form-group">
+            <div class="form-group" data-role="end-date-group">
               <label for="program-newest-edit-end">Tarikh Tamat</label>
               <input id="program-newest-edit-end" name="endDate" type="date" class="form-input" value="${endValue}" required>
             </div>
+          </div>
+          <div class="form-group recurrence-control" data-role="recurrence-group" ${usesRecurringScale ? '' : 'hidden'}>
+            <label>Tempoh Berulang</label>
+            <div class="recurrence-options">
+              <label class="recurrence-option">
+                <input type="radio" name="recurrence_mode" value="forever" ${recurrenceModePreset === 'until' ? '' : 'checked'}>
+                Berterusan
+              </label>
+              <label class="recurrence-option">
+                <input type="radio" name="recurrence_mode" value="until" ${recurrenceModePreset === 'until' ? 'checked' : ''}>
+                Ada tarikh tamat
+              </label>
+            </div>
+            <small class="form-helper">Pilih "Ada tarikh tamat" jika pengulangan perlu dihentikan pada tarikh tertentu.</small>
           </div>
           <div class="form-group">
             <label for="program-newest-edit-category">Kategori</label>
             <input id="program-newest-edit-category" name="category" type="text" class="form-input" value="${currentKategori}" required>
           </div>
           <div class="form-row">
-            <div class="form-group">
-              <label for="program-newest-edit-time-scale">Skala Masa</label>
-              <select id="program-newest-edit-time-scale" name="time_scale" class="form-input">
-                <option value="" ${currentTimeScale === "" ? "selected" : ""}>Pilih skala masa</option>
-                <option value="One Off" ${currentTimeScale === "one off" ? "selected" : ""}>One Off</option>
-                <option value="Daily" ${currentTimeScale === "daily" ? "selected" : ""}>Daily</option>
-                <option value="Weekly" ${currentTimeScale === "weekly" ? "selected" : ""}>Weekly</option>
-                <option value="Monthly" ${currentTimeScale === "monthly" ? "selected" : ""}>Monthly</option>
-                <option value="Berkala" ${currentTimeScale === "berkala" ? "selected" : ""}>Berkala</option>
-              </select>
-            </div>
             <div class="form-group">
               <label for="program-newest-edit-location">Lokasi (Pilihan)</label>
               <input id="program-newest-edit-location" name="location" type="text" class="form-input" value="${currentLocation}">
@@ -1435,6 +1557,7 @@ export class ProgramKehadiranNewest {
       modal,
       selectedGrantId: currentExpenseGrantId
     });
+    this.initializeRecurrenceControls({ modal });
   }
 
   closeSuntingProgramModal() {
@@ -1490,8 +1613,19 @@ export class ProgramKehadiranNewest {
       const hasExistingGrantLink = this.programHasExpenseGrant(previousProgramMeta);
       const requiresGrantSync = shouldDeduct || hasExistingGrantLink;
 
-      if (!name || !description || !startDate || !endDate || !category) {
+      const usesRecurringFlow = this.isRecurringScale(timeScale);
+      const recurrenceMode = (formData.get("recurrence_mode") || "forever").toString();
+
+      if (!name || !description || !startDate || !category) {
         this.showToast("Sila lengkapkan semua maklumat wajib.", "error");
+        return;
+      }
+      if (!usesRecurringFlow && !endDate) {
+        this.showToast("Tarikh tamat diperlukan untuk pilihan ini.", "error");
+        return;
+      }
+      if (usesRecurringFlow && recurrenceMode === "until" && !endDate) {
+        this.showToast("Sila pilih tarikh tamat untuk pengulangan.", "error");
         return;
       }
 
@@ -1517,8 +1651,15 @@ export class ProgramKehadiranNewest {
       }
 
       const startIso = new Date(startDate).toISOString();
-      const endIso = new Date(endDate).toISOString();
-      const status = this.getStatusLabelFromDates(startIso, endIso);
+      let endIso = "";
+      if (usesRecurringFlow) {
+        if (recurrenceMode === "until") {
+          endIso = new Date(endDate).toISOString();
+        }
+      } else {
+        endIso = new Date(endDate).toISOString();
+      }
+      const status = this.getStatusLabelFromDates(startIso, endIso, timeScale);
 
       const payload = {
         name,
@@ -1532,7 +1673,9 @@ export class ProgramKehadiranNewest {
         co_organizer: coOrganizer,
         expenses: normalizedExpenses,
         expense_grant_notes: expenseGrantNotes,
-        expense_grant_id: shouldDeduct ? expenseGrantId : ''
+        expense_grant_id: shouldDeduct ? expenseGrantId : '',
+        recurrence_mode: usesRecurringFlow ? recurrenceMode : '',
+        recurrence_end_date: usesRecurringFlow && recurrenceMode === "until" ? endIso : ''
       };
 
       if (requiresGrantSync) {
@@ -1622,8 +1765,9 @@ export class ProgramKehadiranNewest {
     `;
 
     try {
-      const attendanceDate = this.state.filters.attendanceDate || this.getToday();
-      const records = await (await import('../../services/backend/AttendanceService.js')).listAttendanceByProgram(programId, attendanceDate);
+      const { start: attendanceDate, end: attendanceEnd } = this.getAttendanceDateRange();
+      const { listAttendanceByProgram } = await import('../../services/backend/AttendanceService.js');
+      const records = await listAttendanceByProgram(programId, attendanceDate, { endDate: attendanceEnd });
       this.state.attendance = records || [];
       this.renderAttendanceTable();
 
@@ -1652,7 +1796,7 @@ export class ProgramKehadiranNewest {
     });
 
     if (!records || records.length === 0) {
-      const dateText = this.formatDateForDisplay(this.state.filters.attendanceDate || this.getToday());
+      const dateText = this.formatAttendanceRangeLabel(this.getAttendanceDateRange());
       target.innerHTML = `
         <tr>
           <td colspan="6" class="empty-text">Tiada rekod kehadiran pada ${dateText}.</td>
@@ -1758,6 +1902,7 @@ export class ProgramKehadiranNewest {
     try {
       const { listAttendanceByProgram } = await import('../../services/backend/AttendanceService.js');
       const programs = await ProgramService.listProgram();
+      const totalIndexedParticipants = await this.getIndexedParticipantCount().catch(() => null);
 
       const programResults = await Promise.all(
         programs.map(async (program) => {
@@ -1770,16 +1915,22 @@ export class ProgramKehadiranNewest {
 
       const allRecords = programResults.flatMap(r => r.records);
       const totalPrograms = programs.length;
-      const totalParticipantsSet = new Set();
-      allRecords.forEach(r => totalParticipantsSet.add(r.participant_id || r.no_kp_display || r.id));
-      const totalParticipants = totalParticipantsSet.size;
-      const totalRecords = allRecords.length;
-      const totalHadir = allRecords.filter(r => r.hadir).length;
+      const participantIdSet = new Set();
+      allRecords.forEach(r => participantIdSet.add(r.participant_id || r.no_kp_display || r.id));
+      const fallbackParticipants = participantIdSet.size;
+      const totalParticipants = typeof totalIndexedParticipants === 'number' && totalIndexedParticipants > 0
+        ? totalIndexedParticipants
+        : fallbackParticipants;
+      const capacityDenominator = totalParticipants > 0 ? totalParticipants : null;
       const averageAttendance = programResults.length
         ? Math.round(
           (programResults.reduce((sum, item) => {
-            if (!item.participantCount) return sum;
-            return sum + (item.presentCount / item.participantCount);
+            const programDenom = capacityDenominator ?? item.participantCount;
+            if (!programDenom) return sum;
+            const ratio = capacityDenominator
+              ? item.participantCount / capacityDenominator
+              : item.presentCount / programDenom;
+            return sum + ratio;
           }, 0) / programResults.length) * 100
         )
         : 0;
@@ -1810,16 +1961,23 @@ export class ProgramKehadiranNewest {
         .sort((a, b) => b.attendanceCount - a.attendanceCount || b.attendancePercentage - a.attendancePercentage)
         .slice(0, 5);
 
-      const participation = programResults.map(({ program, participantCount, presentCount }) => ({
-        id: program.id || program.programId || program.nama_program || program.nama || 'program',
-        name: program.nama_program || program.nama || 'Unknown',
-        startDate: program.tarikh_mula || program.startDate,
-        endDate: program.tarikh_tamat || program.endDate,
-        participantCount,
-        attendancePercentage: participantCount ? Math.round((presentCount / participantCount) * 100) : 0
-      }));
+      const totalAvailableForPercentage =
+        typeof totalParticipants === 'number' && totalParticipants > 0 ? totalParticipants : null;
+      const participation = programResults.map(({ program, participantCount }) => {
+        const denominator = totalAvailableForPercentage ?? participantCount ?? 0;
+        const capacityPercentage =
+          denominator > 0 ? Math.round((participantCount / denominator) * 100) : 0;
+        return {
+          id: program.id || program.programId || program.nama_program || program.nama || 'program',
+          name: program.nama_program || program.nama || 'Unknown',
+          startDate: program.tarikh_mula || program.startDate,
+          endDate: program.tarikh_tamat || program.endDate,
+          participantCount,
+          attendancePercentage: capacityPercentage
+        };
+      });
 
-      this.renderAttendanceSummary({ totalPrograms, totalParticipants, averageAttendance, totalHadir });
+      this.renderAttendanceSummary({ totalPrograms, totalParticipants, averageAttendance });
       this.renderTopParticipants(topParticipants);
       this.renderProgramParticipation(participation);
     } catch (error) {
@@ -1838,22 +1996,18 @@ export class ProgramKehadiranNewest {
     }
 
     this.elements.attendanceSummary.innerHTML = `
-      <div class="stat-grid">
-        <div class="stat-card">
-          <span class="stat-value">${summary.totalPrograms ?? 0}</span>
-          <span class="stat-label">Jumlah Program</span>
+      <div class="stat-grid summary-layout">
+        <div class="summary-card accent">
+          <div class="summary-label">Jumlah Program</div>
+          <div class="summary-value">${summary.totalPrograms ?? 0}</div>
         </div>
-        <div class="stat-card">
-          <span class="stat-value">${summary.totalParticipants ?? 0}</span>
-          <span class="stat-label">Jumlah Peserta</span>
+        <div class="summary-card">
+          <div class="summary-label">Jumlah Peserta</div>
+          <div class="summary-value">${summary.totalParticipants ?? 0}</div>
         </div>
-        <div class="stat-card">
-          <span class="stat-value">${summary.averageAttendance ?? 0}%</span>
-          <span class="stat-label">Purata Kehadiran</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-value">${summary.totalHadir ?? 0}</span>
-          <span class="stat-label">Jumlah Hadir</span>
+        <div class="summary-card">
+          <div class="summary-label">Purata Kehadiran</div>
+          <div class="summary-value">${summary.averageAttendance ?? 0}%</div>
         </div>
       </div>
     `;
@@ -2007,6 +2161,91 @@ export class ProgramKehadiranNewest {
       throw error;
     } finally {
       this.state.financialGrantsLoading = false;
+    }
+  }
+
+  initializeRecurrenceControls({ modal }) {
+    if (!modal) return;
+    const timeScaleSelect = modal.querySelector('select[name="time_scale"]');
+    if (!timeScaleSelect) return;
+    const endDateGroup = modal.querySelector('[data-role="end-date-group"]');
+    const endDateInput = endDateGroup?.querySelector('input[name="endDate"]');
+    const recurrenceGroup = modal.querySelector('[data-role="recurrence-group"]');
+    const recurrenceRadios = modal.querySelectorAll('input[name="recurrence_mode"]');
+
+    const resetRecurrenceRadios = () => {
+      const defaultRadio = modal.querySelector('input[name="recurrence_mode"][value="forever"]');
+      if (defaultRadio) {
+        defaultRadio.checked = true;
+      }
+    };
+
+    const isRecurringScale = () => {
+      const scale = (timeScaleSelect.value || '').toLowerCase();
+      return scale === 'daily' || scale === 'weekly';
+    };
+
+    const setRecurrenceVisibility = (visible) => {
+      if (!recurrenceGroup) return;
+      recurrenceGroup.hidden = !visible;
+      recurrenceGroup.style.display = visible ? '' : 'none';
+    };
+
+    const applyEndDateState = () => {
+      const isRecurring = isRecurringScale();
+      if (!endDateInput) return;
+      if (!isRecurring) {
+        endDateInput.disabled = false;
+        endDateInput.required = true;
+        endDateGroup?.classList.remove('disabled');
+        return;
+      }
+      const mode = modal.querySelector('input[name="recurrence_mode"]:checked')?.value || 'forever';
+      const requireEnd = mode === 'until';
+      endDateInput.disabled = !requireEnd;
+      endDateInput.required = requireEnd;
+      endDateGroup?.classList.toggle('disabled', !requireEnd);
+      if (!requireEnd) {
+        endDateInput.value = '';
+      }
+    };
+
+    const handleTimeScaleChange = () => {
+      const isRecurring = isRecurringScale();
+      setRecurrenceVisibility(isRecurring);
+      if (!isRecurring) {
+        resetRecurrenceRadios();
+      }
+      applyEndDateState();
+    };
+
+    recurrenceRadios.forEach(radio => {
+      radio.addEventListener('change', () => applyEndDateState());
+    });
+    timeScaleSelect.addEventListener('change', handleTimeScaleChange);
+    handleTimeScaleChange();
+  }
+
+  async getIndexedParticipantCount(force = false) {
+    if (!force && this.state.participantIndexCount !== null) {
+      return this.state.participantIndexCount;
+    }
+    if (this.state.participantIndexCountLoading) {
+      return this.state.participantIndexCount ?? 0;
+    }
+    this.state.participantIndexCountLoading = true;
+    try {
+      const { collection, getDocs, query } = await import('firebase/firestore');
+      const { db } = await import('../../services/database/firebase.js');
+      const { COLLECTIONS, createEnvFilter } = await import('../../services/database/collections.js');
+      const snapshot = await getDocs(query(collection(db, COLLECTIONS.INDEX_NOKP), createEnvFilter()));
+      this.state.participantIndexCount = snapshot.size;
+      return snapshot.size;
+    } catch (error) {
+      console.warn('ProgramKehadiranNewest: gagal memuat bilangan index_nokp', error);
+      return this.state.participantIndexCount ?? 0;
+    } finally {
+      this.state.participantIndexCountLoading = false;
     }
   }
 
@@ -2213,6 +2452,9 @@ export class ProgramKehadiranNewest {
     const start = program.tarikh_mula || program.startDate;
     const end = program.tarikh_tamat || program.endDate;
     const status = (program.status || '').toLowerCase();
+    if (this.isRecurringScale(program.time_scale || program.timeScale)) {
+      return { label: 'Active', className: 'active' };
+    }
 
     const normalizeDate = (input) => {
       if (!input) return null;
@@ -2249,10 +2491,14 @@ export class ProgramKehadiranNewest {
     return { label, className };
   }
 
-  getStatusLabelFromDates(startDateIso, endDateIso) {
+  getStatusLabelFromDates(startDateIso, endDateIso, timeScale) {
+    if (this.isRecurringScale(timeScale)) {
+      return 'Active';
+    }
     const statusMeta = this.resolveStatus({
       startDate: startDateIso ? new Date(startDateIso) : null,
-      endDate: endDateIso ? new Date(endDateIso) : null
+      endDate: endDateIso ? new Date(endDateIso) : null,
+      time_scale: timeScale
     });
     return statusMeta.label || 'Upcoming';
   }
@@ -2276,40 +2522,6 @@ export class ProgramKehadiranNewest {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
-  }
-
-  exportAttendance() {
-    if (!this.state.attendance || this.state.attendance.length === 0) {
-      this.showToast('Tiada rekod kehadiran untuk dieksport.', 'info');
-      return;
-    }
-
-    const program = this.state.programs.find(p => p.id === this.state.filters.programId);
-    const programNama = program?.nama_program || program?.nama || 'program';
-    const dateKey = this.state.filters.attendanceDate || this.getToday();
-
-    const header = ['Nama', 'No KP', 'Sumber', 'Status', 'Catatan'];
-    const rows = this.state.attendance.map(rec => ([
-      rec.participant_name || '',
-      rec.no_kp_display || rec.participant_id || '',
-      rec.source || '',
-      rec.hadir ? 'Hadir' : 'Tidak',
-      rec.catatan || ''
-    ]));
-
-    const toCsv = (value) => `"${(value ?? '').toString().replace(/"/g, '""')}"`;
-    const csv = [header, ...rows].map(row => row.map(toCsv).join(',')).join('\n');
-
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `attendance-${programNama.replace(/\s+/g, '-').toLowerCase()}-${dateKey}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1500);
-    this.showToast('Fail CSV dimuat turun.', 'success');
   }
 
   injectStyles() {
@@ -3024,10 +3236,37 @@ style.textContent = `
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   }
 
-  .program-newest-wrapper .stat-card {
+  .program-newest-wrapper .stat-grid.summary-layout {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+
+  .program-newest-wrapper .summary-card {
     background: #f9f7ff;
-    border-radius: 12px;
-    padding: 14px;
+    border-radius: 16px;
+    padding: 18px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    border: 1px solid rgba(99, 102, 241, 0.15);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .program-newest-wrapper .summary-card.accent {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(139, 92, 246, 0.1));
+    border-color: transparent;
+  }
+
+  .program-newest-wrapper .summary-label {
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--warna-teks-sekunder);
+  }
+
+  .program-newest-wrapper .summary-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--warna-teks-utama);
   }
 
   .program-newest-wrapper .participant-item {
@@ -3136,6 +3375,27 @@ style.textContent = `
 
   .program-newest-modal .form-group label {
     font-weight: 600;
+    color: var(--warna-teks-utama);
+  }
+
+  .program-newest-modal .form-group.disabled .form-input {
+    background: #f1f5f9;
+    color: #94a3b8;
+    cursor: not-allowed;
+  }
+
+  .program-newest-modal .recurrence-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 6px;
+  }
+
+  .program-newest-modal .recurrence-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
     color: var(--warna-teks-utama);
   }
 

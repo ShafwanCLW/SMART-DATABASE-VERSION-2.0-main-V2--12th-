@@ -20,6 +20,18 @@ import { COLLECTIONS, STANDARD_FIELDS, addStandardFields, createEnvFilter, getEn
 
 const pickFirst = (...values) => values.find(value => value !== undefined && value !== null);
 
+const normalizeParticipantType = (value = 'KIR') => {
+  if (!value) return 'KIR';
+  return String(value).trim().toUpperCase();
+};
+
+const getParticipantFieldByType = (participantType) => {
+  const normalized = normalizeParticipantType(participantType);
+  if (normalized === 'PKIR') return 'pkir_id';
+  if (normalized === 'AIR') return 'air_id';
+  return 'kir_id';
+};
+
 const toDate = (value) => {
   if (!value) return null;
   if (value instanceof Date) {
@@ -135,6 +147,11 @@ const normalizeProgramPayload = (programData = {}, { includeDefaults = false } =
     data.expense_deduction_transaction_id = expenseDeductionTransactionId ?? '';
   }
 
+  const programCode = pickFirst(programData.program_code, programData.programCode, programData.code);
+  if (programCode !== undefined || includeDefaults) {
+    data.program_code = programCode ?? '';
+  }
+
   return data;
 };
 
@@ -244,6 +261,64 @@ export class ProgramService {
     } catch (error) {
       console.error('Error listing kehadiran by KIR:', error);
       throw new Error('Gagal memuat rekod kehadiran: ' + error.message);
+    }
+  }
+  
+  // Get attendance records for a single participant (KIR/PKIR/AIR)
+  static async listAttendanceByParticipant(participantId, options = {}) {
+    const { participantType = 'KIR' } = options;
+    
+    if (!participantId) {
+      return [];
+    }
+    
+    try {
+      const participantField = getParticipantFieldByType(participantType);
+      const kehadiranQuery = query(
+        collection(db, COLLECTIONS.KEHADIRAN_PROGRAM),
+        where(participantField, '==', participantId),
+        orderBy('tarikh', 'desc')
+      );
+      
+      const snapshot = await getDocs(kehadiranQuery);
+      const currentEnv = getEnvironment();
+      
+      return snapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+        .filter(record => !record.env || record.env === currentEnv);
+    } catch (error) {
+      console.error('Error listing attendance by participant:', error);
+      throw new Error('Gagal memuat rekod kehadiran peserta: ' + error.message);
+    }
+  }
+  
+  static async listAttendanceByParticipantIndex(participantIndexId) {
+    if (!participantIndexId) {
+      return [];
+    }
+    
+    try {
+      const kehadiranQuery = query(
+        collection(db, COLLECTIONS.KEHADIRAN_PROGRAM),
+        where('participant_id', '==', participantIndexId),
+        orderBy('tarikh', 'desc')
+      );
+      
+      const snapshot = await getDocs(kehadiranQuery);
+      const currentEnv = getEnvironment();
+      
+      return snapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+        .filter(record => !record.env || record.env === currentEnv);
+    } catch (error) {
+      console.error('Error listing attendance by participant index:', error);
+      throw new Error('Gagal memuat rekod kehadiran peserta: ' + error.message);
     }
   }
   
