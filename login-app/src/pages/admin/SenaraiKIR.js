@@ -9,11 +9,20 @@ export class SenaraiKIR {
         this.currentPage = 1;
         this.pageSize = 10;
         this.totalRecords = 0;
+        this.pageCursors = { 1: null };
+        this.hasMore = false;
         this.currentFilters = {
             search: '',
             status: 'all',
             negeri: 'all'
         };
+    }
+
+    resetPaginationState() {
+        this.currentPage = 1;
+        this.pageCursors = { 1: null };
+        this.hasMore = false;
+        this.totalRecords = 0;
     }
 
     createContent() {
@@ -757,6 +766,7 @@ export class SenaraiKIR {
                 search: this.currentFilters.search,
                 status: this.currentFilters.status === 'all' ? '' : this.mapStatusToDatabase(this.currentFilters.status),
                 daerah: this.currentFilters.negeri === 'all' ? '' : this.currentFilters.negeri,
+                pageCursor: this.pageCursors[this.currentPage] || null,
                 pageSize: this.pageSize
             };
 
@@ -764,7 +774,14 @@ export class SenaraiKIR {
             const result = await KIRService.getKIRList(params);
             
             this.currentKIRData = result.items || [];
-            this.totalRecords = result.items ? result.items.length : 0;
+            this.hasMore = !!result.hasMore;
+            const nextCursor = result.nextCursor || null;
+            if (nextCursor) {
+                this.pageCursors[this.currentPage + 1] = nextCursor;
+            } else {
+                delete this.pageCursors[this.currentPage + 1];
+            }
+            this.totalRecords = (this.currentPage - 1) * this.pageSize + this.currentKIRData.length;
             
             this.renderKIRTable();
             this.updateTableInfo();
@@ -902,7 +919,7 @@ export class SenaraiKIR {
         const searchInput = document.getElementById('kir-search-new');
         if (searchInput) {
             this.currentFilters.search = searchInput.value.trim();
-            this.currentPage = 1;
+            this.resetPaginationState();
             this.loadKIRData();
         }
     }
@@ -914,7 +931,7 @@ export class SenaraiKIR {
         if (statusFilter) this.currentFilters.status = statusFilter.value;
         if (negeriFilter) this.currentFilters.negeri = negeriFilter.value;
         
-        this.currentPage = 1;
+        this.resetPaginationState();
         this.loadKIRData();
     }
 
@@ -934,7 +951,7 @@ export class SenaraiKIR {
         if (statusFilter) statusFilter.value = 'all';
         if (negeriFilter) negeriFilter.value = 'all';
         
-        this.currentPage = 1;
+        this.resetPaginationState();
         this.loadKIRData();
     }
 
@@ -947,8 +964,8 @@ export class SenaraiKIR {
     }
 
     nextPage() {
-        const totalPages = Math.ceil(this.totalRecords / this.pageSize);
-        if (this.currentPage < totalPages) {
+        const nextCursor = this.pageCursors[this.currentPage + 1];
+        if (nextCursor) {
             this.currentPage++;
             this.loadKIRData();
         }
@@ -959,13 +976,14 @@ export class SenaraiKIR {
         const tableInfo = document.getElementById('table-info-new');
         if (tableInfo) {
             const start = (this.currentPage - 1) * this.pageSize + 1;
-            const end = Math.min(this.currentPage * this.pageSize, this.totalRecords);
-            tableInfo.textContent = `Menunjukkan ${start}-${end} daripada ${this.totalRecords} rekod`;
+            const end = start + this.currentKIRData.length - 1;
+            const totalDisplay = this.hasMore ? `${end}+` : `${this.totalRecords}`;
+            tableInfo.textContent = `Menunjukkan ${start}-${end} daripada ${totalDisplay} rekod`;
         }
     }
 
     updatePagination() {
-        const totalPages = Math.ceil(this.totalRecords / this.pageSize);
+        const totalPages = this.hasMore ? this.currentPage + 1 : this.currentPage;
         const paginationInfo = document.getElementById('pagination-info-new');
         const prevBtn = document.getElementById('prev-page-new');
         const nextBtn = document.getElementById('next-page-new');
@@ -979,7 +997,7 @@ export class SenaraiKIR {
         }
 
         if (nextBtn) {
-            nextBtn.disabled = this.currentPage >= totalPages;
+            nextBtn.disabled = !this.pageCursors[this.currentPage + 1];
         }
     }
 
