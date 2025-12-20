@@ -1100,6 +1100,70 @@ body.kir-profile-active #app {
   min-height: 80px;
 }
 
+.kir-profile .spouse-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.kir-profile .spouse-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.kir-profile .spouse-card-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: #f8fafc;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.kir-profile .spouse-card-header:focus {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.kir-profile .spouse-card-title {
+  font-size: 0.98rem;
+}
+
+.kir-profile .spouse-card-status {
+  margin-left: auto;
+  font-size: 0.85rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.kir-profile .spouse-card-toggle {
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid #64748b;
+  border-bottom: 2px solid #64748b;
+  transform: rotate(45deg);
+  transition: transform 0.2s ease;
+}
+
+.kir-profile .spouse-card.is-open .spouse-card-toggle {
+  transform: rotate(-135deg);
+}
+
+.kir-profile .spouse-card-body {
+  padding: 1rem;
+  border-top: 1px solid #e2e8f0;
+  background: #fff;
+}
+
 /* Section Headers */
 .kir-profile .section-header {
   color: #374151;

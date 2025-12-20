@@ -427,6 +427,7 @@ export class KIRProfile {
           pasanganContainer.innerHTML = this.renderSpouseBlocks(count, this.kirData || {});
           this.bindSpouseStatusEvents(count);
           this.bindSpouseSyncEvents(count);
+          this.bindSpouseAccordionEvents(count);
           this.syncSpouseFieldsFromPKIR(1, { onlyIfEmpty: true });
         }
       }
@@ -447,6 +448,7 @@ export class KIRProfile {
           pasanganContainer.innerHTML = this.renderSpouseBlocks(count, this.kirData || {});
           this.bindSpouseStatusEvents(count);
           this.bindSpouseSyncEvents(count);
+          this.bindSpouseAccordionEvents(count);
           this.syncSpouseFieldsFromPKIR(1, { onlyIfEmpty: true });
         }
         this.markTabDirty('maklumat-asas');
@@ -457,6 +459,7 @@ export class KIRProfile {
     const initialCount = parseInt(bilanganIsteriSelect?.value || '1', 10) || 1;
     this.bindSpouseStatusEvents(initialCount);
     this.bindSpouseSyncEvents(initialCount);
+    this.bindSpouseAccordionEvents(initialCount);
     this.syncSpouseFieldsFromPKIR(1, { onlyIfEmpty: true });
     toggleSpouseSection();
   }
@@ -468,6 +471,7 @@ export class KIRProfile {
       if (!statusEl) continue;
       const ceraiGroup = document.getElementById(`cerai_group_${i}`);
       const alamatLabel = document.getElementById(`alamat_label_${i}`);
+      this.updateSpouseCardHeader(i, statusEl.value);
       statusEl.addEventListener('change', (event) => {
         const isCerai = event.target.value === 'Sudah Bercerai';
         if (ceraiGroup) {
@@ -476,10 +480,43 @@ export class KIRProfile {
         if (alamatLabel) {
           alamatLabel.textContent = isCerai ? 'Alamat Bekas Pasangan' : 'Alamat Pasangan';
         }
+        this.updateSpouseCardHeader(i, event.target.value);
         if (event.target.value === 'Masih berkahwin') {
           this.syncSpouseFieldsFromPKIR(i, { onlyIfEmpty: true });
         }
       });
+    }
+  }
+
+  bindSpouseAccordionEvents(count) {
+    if (!count || count < 1) return;
+    for (let i = 1; i <= count; i++) {
+      const card = document.querySelector(`.spouse-card[data-index="${i}"]`);
+      if (!card || card.dataset.accordionBound === 'true') continue;
+      const header = card.querySelector('.spouse-card-header');
+      const body = card.querySelector('.spouse-card-body');
+      if (!header || !body) continue;
+      header.addEventListener('click', () => {
+        const isOpen = card.classList.contains('is-open');
+        document.querySelectorAll('.spouse-card').forEach(item => {
+          if (item === card) return;
+          item.classList.remove('is-open');
+          const itemBody = item.querySelector('.spouse-card-body');
+          const itemHeader = item.querySelector('.spouse-card-header');
+          if (itemBody) itemBody.style.display = 'none';
+          if (itemHeader) itemHeader.setAttribute('aria-expanded', 'false');
+        });
+        if (isOpen) {
+          card.classList.remove('is-open');
+          body.style.display = 'none';
+          header.setAttribute('aria-expanded', 'false');
+        } else {
+          card.classList.add('is-open');
+          body.style.display = '';
+          header.setAttribute('aria-expanded', 'true');
+        }
+      });
+      card.dataset.accordionBound = 'true';
     }
   }
 
@@ -1173,7 +1210,11 @@ export class KIRProfile {
     for (let i = 1; i <= safeCount; i++) {
       blocks.push(this.getSpouseBlockHTML(i, data));
     }
-    return blocks.join('');
+    return `
+      <div class="spouse-accordion">
+        ${blocks.join('')}
+      </div>
+    `;
   }
 
   getSpouseBlockHTML(index, data = {}) {
@@ -1193,9 +1234,16 @@ export class KIRProfile {
       }
     }
     noKp = this.formatICForInput(noKp);
+    const isOpen = index === 1;
+    const statusLabel = this.getSpouseStatusLabel(status);
     return `
-      <div class="spouse-block" data-index="${index}">
-        <h4>Pasangan ${index}</h4>
+      <div class="spouse-card ${isOpen ? 'is-open' : ''}" data-index="${index}">
+        <button type="button" class="spouse-card-header" aria-expanded="${isOpen ? 'true' : 'false'}">
+          <span class="spouse-card-title">Pasangan ${index}</span>
+          <span class="spouse-card-status" data-role="spouse-status">${this.escapeHtml(statusLabel)}</span>
+          <span class="spouse-card-toggle" aria-hidden="true"></span>
+        </button>
+        <div class="spouse-card-body" ${isOpen ? '' : 'style="display:none;"'}>
         <div class="form-row">
           <div class="form-group">
             <label for="tarikh_nikah_${index}">Tarikh Nikah</label>
@@ -1237,9 +1285,23 @@ export class KIRProfile {
             <input type="file" id="sijil_cerai_${index}" name="sijil_cerai_${index}" accept=".pdf,image/*">
           </div>
         </div>
-        <hr>
+        </div>
       </div>
     `;
+  }
+
+  getSpouseStatusLabel(statusValue = '') {
+    if (!statusValue) return 'Status belum dipilih';
+    return statusValue;
+  }
+
+  updateSpouseCardHeader(index, statusValue = '') {
+    const card = document.querySelector(`.spouse-card[data-index="${index}"]`);
+    if (!card) return;
+    const statusEl = card.querySelector('[data-role="spouse-status"]');
+    if (statusEl) {
+      statusEl.textContent = this.getSpouseStatusLabel(statusValue);
+    }
   }
 
   getPKIRSpouseBasics() {
