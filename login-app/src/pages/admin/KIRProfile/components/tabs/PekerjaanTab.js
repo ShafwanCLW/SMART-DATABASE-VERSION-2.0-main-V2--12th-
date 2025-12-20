@@ -190,7 +190,7 @@ export class PekerjaanTab extends BaseTab {
         ];
         
         // Show/hide work-related fields based on employment status
-        if (value === 'Bekerja') {
+        if (value === 'Bekerja' || value === 'Berniaga') {
           workRelatedGroups.forEach(groupId => {
             const group = document.getElementById(groupId);
             if (group) group.style.display = 'block';

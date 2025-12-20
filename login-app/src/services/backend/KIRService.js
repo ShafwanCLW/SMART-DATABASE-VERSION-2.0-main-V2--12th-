@@ -551,6 +551,7 @@ export class KIRService {
           kafa_fatihah: draft.kafa_fatihah || '',
           kafa_solat: draft.kafa_solat || '',
           kafa_puasa: draft.kafa_puasa || '',
+          kafa_kemahiran_mengaji: draft.kafa_kemahiran_mengaji || '',
           kafa_skor: draft.kafa_skor || 0,
           tarikh_cipta: serverTimestamp(),
           tarikh_kemas_kini: serverTimestamp()
@@ -1174,12 +1175,13 @@ export class KIRService {
       kafa_fatihah: draft.kafa_fatihah,
       kafa_solat: draft.kafa_solat,
       kafa_puasa: draft.kafa_puasa,
+      kafa_kemahiran_mengaji: draft.kafa_kemahiran_mengaji,
       kafa_skor: draft.kafa_skor
     };
     console.log('KAFA fields check:', kafaFields);
     const hasData = draft.kafa_sumber || draft.kafa_iman || draft.kafa_islam || 
            draft.kafa_fatihah || draft.kafa_solat || draft.kafa_puasa || 
-           draft.kafa_skor;
+           draft.kafa_kemahiran_mengaji || draft.kafa_skor;
     console.log('Has KAFA data result:', hasData);
     return hasData;
   }

@@ -272,6 +272,7 @@ export class KIRProfile {
       this.relatedData = relatedData;
       this.airData = airData || [];
       this.pkirData = pkirData;
+      this.pendingPKIRPrefill = this.getKIRSpouseBasicsFromData(kirData);
       
       // Render the UI with loaded data
       this.render();
@@ -361,6 +362,9 @@ export class KIRProfile {
         // Defer to ensure DOM is fully painted
         setTimeout(() => {
           activeTabComponent.setupEventListeners();
+          if (this.currentTab === 'pkir') {
+            this.prefillPKIRFormFromPending({ onlyIfEmpty: true });
+          }
         }, 0);
       }
       
@@ -422,6 +426,8 @@ export class KIRProfile {
           const count = parseInt(bilanganIsteriSelect?.value || '1', 10) || 1;
           pasanganContainer.innerHTML = this.renderSpouseBlocks(count, this.kirData || {});
           this.bindSpouseStatusEvents(count);
+          this.bindSpouseSyncEvents(count);
+          this.syncSpouseFieldsFromPKIR(1, { onlyIfEmpty: true });
         }
       }
     };
@@ -440,6 +446,8 @@ export class KIRProfile {
         if (pasanganContainer) {
           pasanganContainer.innerHTML = this.renderSpouseBlocks(count, this.kirData || {});
           this.bindSpouseStatusEvents(count);
+          this.bindSpouseSyncEvents(count);
+          this.syncSpouseFieldsFromPKIR(1, { onlyIfEmpty: true });
         }
         this.markTabDirty('maklumat-asas');
       });
@@ -448,6 +456,8 @@ export class KIRProfile {
 
     const initialCount = parseInt(bilanganIsteriSelect?.value || '1', 10) || 1;
     this.bindSpouseStatusEvents(initialCount);
+    this.bindSpouseSyncEvents(initialCount);
+    this.syncSpouseFieldsFromPKIR(1, { onlyIfEmpty: true });
     toggleSpouseSection();
   }
 
@@ -466,7 +476,84 @@ export class KIRProfile {
         if (alamatLabel) {
           alamatLabel.textContent = isCerai ? 'Alamat Bekas Pasangan' : 'Alamat Pasangan';
         }
+        if (event.target.value === 'Masih berkahwin') {
+          this.syncSpouseFieldsFromPKIR(i, { onlyIfEmpty: true });
+        }
       });
+    }
+  }
+
+  bindSpouseSyncEvents(count) {
+    if (!count || count < 1) return;
+    for (let i = 1; i <= count; i++) {
+      const nameInput = document.getElementById(`nama_pasangan_${i}`);
+      const noKpInput = document.getElementById(`no_kp_pasangan_${i}`);
+      const statusInput = document.getElementById(`status_pasangan_${i}`);
+      if (statusInput && !statusInput.dataset.pkirSyncBound) {
+        statusInput.addEventListener('change', () => {
+          this.syncSpouseFieldsFromPKIR(i, { onlyIfEmpty: true });
+          this.syncPKIRFormFromSpouse(i, { onlyIfEmpty: true });
+        });
+        statusInput.dataset.pkirSyncBound = 'true';
+      }
+      if (nameInput && !nameInput.dataset.pkirSyncBound) {
+        nameInput.addEventListener('input', () => {
+          this.syncPKIRFormFromSpouse(i, { onlyIfEmpty: true });
+        });
+        nameInput.dataset.pkirSyncBound = 'true';
+      }
+      if (noKpInput && !noKpInput.dataset.pkirSyncBound) {
+        this.attachICInputMask(noKpInput);
+        noKpInput.addEventListener('input', () => {
+          this.syncPKIRFormFromSpouse(i, { onlyIfEmpty: true });
+        });
+        noKpInput.dataset.pkirSyncBound = 'true';
+      }
+    }
+  }
+
+  syncSpouseFieldsFromPKIR(index = 1, { onlyIfEmpty = false } = {}) {
+    if (index !== 1) return;
+    const statusInput = document.getElementById(`status_pasangan_${index}`);
+    if (statusInput && statusInput.value !== 'Masih berkahwin') return;
+    const pkirBasics = this.getPKIRSpouseBasics();
+    if (!pkirBasics.nama && !pkirBasics.noKp) return;
+
+    const nameInput = document.getElementById(`nama_pasangan_${index}`);
+    const noKpInput = document.getElementById(`no_kp_pasangan_${index}`);
+    if (nameInput && pkirBasics.nama && (!onlyIfEmpty || !nameInput.value.trim())) {
+      nameInput.value = pkirBasics.nama;
+    }
+    if (noKpInput && pkirBasics.noKp && (!onlyIfEmpty || !noKpInput.value.trim())) {
+      noKpInput.value = this.formatICForInput(pkirBasics.noKp);
+    }
+  }
+
+  syncPKIRFormFromSpouse(index = 1, { onlyIfEmpty = false } = {}) {
+    if (index !== 1) return;
+    const statusInput = document.getElementById(`status_pasangan_${index}`);
+    if (statusInput && statusInput.value !== 'Masih berkahwin') return;
+
+    const nameInput = document.getElementById(`nama_pasangan_${index}`);
+    const noKpInput = document.getElementById(`no_kp_pasangan_${index}`);
+    const pkirForm = document.getElementById('pkirForm');
+    this.setPendingPKIRPrefill({
+      nama: nameInput.value.trim(),
+      noKp: noKpInput.value.trim()
+    });
+    if (!pkirForm || !nameInput || !noKpInput) return;
+
+    const pkirNameInput = pkirForm.querySelector('[name="nama_pasangan"]');
+    const pkirNoKpInput = pkirForm.querySelector('[name="no_kp_pasangan"]');
+    if (pkirNameInput && (!onlyIfEmpty || !pkirNameInput.value.trim())) {
+      pkirNameInput.value = nameInput.value.trim();
+    }
+    if (pkirNoKpInput && (!onlyIfEmpty || !pkirNoKpInput.value.trim())) {
+      const rawNoKp = noKpInput.value.trim();
+      const pkirTab = this.tabComponents?.pkir || window.pkirTab;
+      pkirNoKpInput.value = pkirTab?.formatICForInput
+        ? pkirTab.formatICForInput(rawNoKp)
+        : rawNoKp;
     }
   }
 
@@ -486,6 +573,71 @@ export class KIRProfile {
 
     birthInput.value = info.formattedDate;
     ageInput.value = info.age;
+  }
+
+  normalizeICValue(value = '') {
+    const raw = (value || '').toString();
+    if (this.isPassportValue(raw)) {
+      return raw.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20);
+    }
+    return raw.replace(/\D/g, '').slice(0, 12);
+  }
+
+  isPassportValue(value = '') {
+    return /[A-Za-z]/.test((value || '').toString());
+  }
+
+  formatICForInput(value = '') {
+    const normalized = this.normalizeICValue(value);
+    if (!normalized) return '';
+    if (this.isPassportValue(normalized)) {
+      return normalized;
+    }
+    const seg1 = normalized.slice(0, 6);
+    const seg2 = normalized.slice(6, 8);
+    const seg3 = normalized.slice(8, 12);
+    return [seg1, seg2, seg3].filter(Boolean).join('-');
+  }
+
+  getICCursorPosition(digitCount, formattedValue) {
+    if (digitCount <= 0) return 0;
+    let seen = 0;
+    for (let i = 0; i < formattedValue.length; i++) {
+      if (/\d/.test(formattedValue[i])) {
+        seen++;
+        if (seen === digitCount) return i + 1;
+      }
+    }
+    return formattedValue.length;
+  }
+
+  attachICInputMask(input) {
+    if (!input) return;
+    input.setAttribute('maxlength', '20');
+
+    const formatAndMaintainCursor = (event) => {
+      const rawValue = event.target.value || '';
+      if (this.isPassportValue(rawValue)) {
+        const normalized = this.normalizeICValue(rawValue);
+        event.target.value = normalized;
+        return;
+      }
+
+      const selectionStart = event.target.selectionStart || rawValue.length;
+      const digitsBeforeCursor = this.normalizeICValue(rawValue.slice(0, selectionStart)).replace(/\D/g, '').length;
+      const formattedValue = this.formatICForInput(rawValue);
+      event.target.value = formattedValue;
+
+      const cursorPosition = this.getICCursorPosition(digitsBeforeCursor, formattedValue);
+      window.requestAnimationFrame(() => {
+        event.target.setSelectionRange(cursorPosition, cursorPosition);
+      });
+    };
+
+    input.addEventListener('input', formatAndMaintainCursor);
+    input.addEventListener('blur', () => {
+      input.value = this.formatICForInput(input.value);
+    });
   }
 
   // Create main KIR Profile HTML
@@ -930,7 +1082,25 @@ export class KIRProfile {
             
             <div class="form-group">
               <label for="tempat_lahir">Tempat Lahir</label>
-              <input type="text" id="tempat_lahir" name="tempat_lahir" value="${data.tempat_lahir || ''}">
+              <select id="tempat_lahir" name="tempat_lahir">
+                <option value="">Pilih Negeri</option>
+                <option value="Johor" ${data.tempat_lahir === 'Johor' ? 'selected' : ''}>Johor</option>
+                <option value="Kedah" ${data.tempat_lahir === 'Kedah' ? 'selected' : ''}>Kedah</option>
+                <option value="Kelantan" ${data.tempat_lahir === 'Kelantan' ? 'selected' : ''}>Kelantan</option>
+                <option value="Melaka" ${data.tempat_lahir === 'Melaka' ? 'selected' : ''}>Melaka</option>
+                <option value="Negeri Sembilan" ${data.tempat_lahir === 'Negeri Sembilan' ? 'selected' : ''}>Negeri Sembilan</option>
+                <option value="Pahang" ${data.tempat_lahir === 'Pahang' ? 'selected' : ''}>Pahang</option>
+                <option value="Perak" ${data.tempat_lahir === 'Perak' ? 'selected' : ''}>Perak</option>
+                <option value="Perlis" ${data.tempat_lahir === 'Perlis' ? 'selected' : ''}>Perlis</option>
+                <option value="Pulau Pinang" ${data.tempat_lahir === 'Pulau Pinang' ? 'selected' : ''}>Pulau Pinang</option>
+                <option value="Sabah" ${data.tempat_lahir === 'Sabah' ? 'selected' : ''}>Sabah</option>
+                <option value="Sarawak" ${data.tempat_lahir === 'Sarawak' ? 'selected' : ''}>Sarawak</option>
+                <option value="Selangor" ${data.tempat_lahir === 'Selangor' ? 'selected' : ''}>Selangor</option>
+                <option value="Terengganu" ${data.tempat_lahir === 'Terengganu' ? 'selected' : ''}>Terengganu</option>
+                <option value="Wilayah Persekutuan Kuala Lumpur" ${data.tempat_lahir === 'Wilayah Persekutuan Kuala Lumpur' ? 'selected' : ''}>Wilayah Persekutuan Kuala Lumpur</option>
+                <option value="Wilayah Persekutuan Labuan" ${data.tempat_lahir === 'Wilayah Persekutuan Labuan' ? 'selected' : ''}>Wilayah Persekutuan Labuan</option>
+                <option value="Wilayah Persekutuan Putrajaya" ${data.tempat_lahir === 'Wilayah Persekutuan Putrajaya' ? 'selected' : ''}>Wilayah Persekutuan Putrajaya</option>
+              </select>
             </div>
           </div>
 
@@ -1007,12 +1177,22 @@ export class KIRProfile {
   }
 
   getSpouseBlockHTML(index, data = {}) {
-    const name = data[`nama_pasangan_${index}`] || '';
-    const noKp = data[`no_kp_pasangan_${index}`] || '';
+    let name = data[`nama_pasangan_${index}`] || '';
+    let noKp = data[`no_kp_pasangan_${index}`] || '';
     const alamat = data[`alamat_pasangan_${index}`] || '';
     const tarikhNikah = this.getDateInputValue(data[`tarikh_nikah_${index}`]) || '';
     const status = data[`status_pasangan_${index}`] || '';
     const ceraiSelected = status === 'Sudah Bercerai';
+    if (index === 1 && status === 'Masih berkahwin') {
+      const pkirBasics = this.getPKIRSpouseBasics();
+      if (!name && pkirBasics.nama) {
+        name = pkirBasics.nama;
+      }
+      if (!noKp && pkirBasics.noKp) {
+        noKp = pkirBasics.noKp;
+      }
+    }
+    noKp = this.formatICForInput(noKp);
     return `
       <div class="spouse-block" data-index="${index}">
         <h4>Pasangan ${index}</h4>
@@ -1060,6 +1240,62 @@ export class KIRProfile {
         <hr>
       </div>
     `;
+  }
+
+  getPKIRSpouseBasics() {
+    const pkir = this.pkirData || {};
+    return {
+      nama: pkir.nama_pasangan || pkir.asas?.nama || '',
+      noKp: pkir.no_kp_pasangan || pkir.asas?.no_kp || ''
+    };
+  }
+
+  getKIRSpouseBasicsFromData(data = this.kirData || {}) {
+    if (!data || data.status_pasangan_1 !== 'Masih berkahwin') {
+      return { nama: '', noKp: '' };
+    }
+    return {
+      nama: data.nama_pasangan_1 || '',
+      noKp: data.no_kp_pasangan_1 || ''
+    };
+  }
+
+  setPendingPKIRPrefill(data = {}) {
+    const nama = (data.nama || '').toString().trim();
+    const noKp = (data.noKp || '').toString().trim();
+    if (!nama && !noKp) return;
+    this.pendingPKIRPrefill = { nama, noKp };
+  }
+
+  updatePKIRPrefillFromMaklumatAsas(formData = {}) {
+    if (formData.status_pasangan_1 !== 'Masih berkahwin') {
+      this.pendingPKIRPrefill = null;
+      return;
+    }
+    this.setPendingPKIRPrefill({
+      nama: formData.nama_pasangan_1 || '',
+      noKp: formData.no_kp_pasangan_1 || ''
+    });
+  }
+
+  prefillPKIRFormFromPending({ onlyIfEmpty = false } = {}) {
+    const pkirForm = document.getElementById('pkirForm');
+    if (!pkirForm) return;
+
+    const pending = this.pendingPKIRPrefill || this.getKIRSpouseBasicsFromData();
+    if (!pending.nama && !pending.noKp) return;
+
+    const pkirNameInput = pkirForm.querySelector('[name="nama_pasangan"]');
+    const pkirNoKpInput = pkirForm.querySelector('[name="no_kp_pasangan"]');
+    if (pkirNameInput && pending.nama && (!onlyIfEmpty || !pkirNameInput.value.trim())) {
+      pkirNameInput.value = pending.nama;
+    }
+    if (pkirNoKpInput && pending.noKp && (!onlyIfEmpty || !pkirNoKpInput.value.trim())) {
+      const pkirTab = this.tabComponents?.pkir || window.pkirTab;
+      pkirNoKpInput.value = pkirTab?.formatICForInput
+        ? pkirTab.formatICForInput(pending.noKp)
+        : pending.noKp;
+    }
   }
 
   renderDocumentPreview(docKey) {
@@ -3875,6 +4111,9 @@ export class KIRProfile {
       // Use setTimeout to ensure DOM is ready
       setTimeout(() => {
         this.tabComponents[tabId].setupEventListeners();
+        if (tabId === 'pkir') {
+          this.prefillPKIRFormFromPending({ onlyIfEmpty: true });
+        }
       }, 0);
     }
     
@@ -3953,6 +4192,11 @@ export class KIRProfile {
       
       // Save data
       await this.saveTabData(tabId, formData);
+
+      if (tabId === 'maklumat-asas') {
+        this.updatePKIRPrefillFromMaklumatAsas(formData);
+        this.prefillPKIRFormFromPending({ onlyIfEmpty: true });
+      }
       
       // Success feedback
       this.clearTabDirty(tabId);

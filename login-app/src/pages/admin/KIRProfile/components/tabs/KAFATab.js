@@ -26,6 +26,7 @@ export class KAFATab extends BaseTab {
     const tahapFatihah = data.kafa_fatihah || data.tahap_fatihah || '';
     const tahapSolat = data.kafa_solat || data.tahap_taharah_wuduk_solat || '';
     const tahapPuasa = data.kafa_puasa || data.tahap_puasa_fidyah_zakat || '';
+    const kemahiranMengaji = data.kafa_kemahiran_mengaji || data.kemahiran_mengaji || '';
 
     return `
       <form class="kir-form" data-tab="kafa">
@@ -35,6 +36,17 @@ export class KAFATab extends BaseTab {
           <div class="form-group">
             <label for="kafa_sumber">Sumber Pengetahuan Agama</label>
             <textarea id="kafa_sumber" name="kafa_sumber" rows="3">${sumberPengetahuan}</textarea>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="kafa_kemahiran_mengaji">Kemahiran Mengaji</label>
+              <select id="kafa_kemahiran_mengaji" name="kafa_kemahiran_mengaji">
+                <option value="">Pilih Kemahiran</option>
+                <option value="Boleh Mengaji" ${kemahiranMengaji === 'Boleh Mengaji' ? 'selected' : ''}>Boleh Mengaji</option>
+                <option value="Tidak Boleh Mengaji" ${kemahiranMengaji === 'Tidak Boleh Mengaji' ? 'selected' : ''}>Tidak Boleh Mengaji</option>
+              </select>
+            </div>
           </div>
           
           <div class="form-row">

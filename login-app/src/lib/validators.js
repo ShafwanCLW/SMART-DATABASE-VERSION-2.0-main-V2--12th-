@@ -101,6 +101,8 @@ const KIR_AIR_SCHEMA = {
   status_perkahwinan: 'string',
   pekerjaan: 'string',
   pendapatan_bulanan: 'number',
+  kemahiran_mengaji: 'string',
+  minat: 'string',
   env: 'string',
   tarikh_cipta: 'timestamp',
   tarikh_kemas_kini: 'timestamp'
@@ -129,6 +131,7 @@ const KIR_KAFA_SCHEMA = {
   kafa_fatihah: 'string',
   kafa_solat: 'string',
   kafa_puasa: 'string',
+  kafa_kemahiran_mengaji: 'string',
   kafa_skor: 'number',
   env: 'string',
   tarikh_cipta: 'timestamp',
