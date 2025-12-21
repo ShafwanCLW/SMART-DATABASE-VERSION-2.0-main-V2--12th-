@@ -9957,25 +9957,12 @@ async function fetchFinancialSummaryData() {
       };
     }
     
-    const legacyIncomeTransactions = legacyIncomeSnapshot.docs
-      .map(doc => parseLegacyTransaction(doc, 'income'))
-      .filter(Boolean);
-    const legacyExpenseTransactions = legacyExpenseSnapshot.docs
-      .map(doc => parseLegacyTransaction(doc, 'expense'))
-      .filter(Boolean);
-    
-    const totalIncome = legacyIncomeTransactions.reduce((sum, tx) => sum + tx.amount, 0);
-    const totalExpenses = legacyExpenseTransactions.reduce((sum, tx) => sum + tx.amount, 0);
-    const recentTransactions = [...legacyIncomeTransactions, ...legacyExpenseTransactions]
-      .sort((a, b) => b.date - a.date)
-      .slice(0, 5);
-    
-    return {
-      totalIncome,
-      totalExpenses,
-      netBalance: totalIncome - totalExpenses,
-      recentTransactions
-    };
+      return {
+        totalIncome: 0,
+        totalExpenses: 0,
+        netBalance: 0,
+        recentTransactions: []
+      };
   } catch (error) {
     console.error('Error loading financial summary data:', error);
     return {

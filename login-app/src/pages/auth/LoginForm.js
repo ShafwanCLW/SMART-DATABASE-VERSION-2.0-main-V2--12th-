@@ -44,25 +44,7 @@ export function createLoginForm() {
           <div id="login-error-message" class="error-message" style="display: none;"></div>
         </form>
         
-        <div class="demo-credentials" id="demo-section">
-          <h3>Quick Demo Login:</h3>
-          <div class="demo-buttons">
-            <button type="button" class="demo-btn user-demo" data-email="unknownmr5853@gmail.com" data-password="123123" data-role="user">
-              <span class="demo-icon">👤</span>
-              <div class="demo-text">
-                <strong>Login as User</strong>
-                <small>user@example.com</small>
-              </div>
-            </button>
-            <button type="button" class="demo-btn admin-demo" data-email="m.alifmasdar@gmail.com" data-password="123123" data-role="admin">
-              <span class="demo-icon">⚙️</span>
-              <div class="demo-text">
-                <strong>Login as Admin</strong>
-                <small>m.alifmasdar@gmail.com</small>
-              </div>
-            </button>
-          </div>
-        </div>
+        
 
       </div>
       
