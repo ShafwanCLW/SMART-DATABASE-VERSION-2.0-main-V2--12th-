@@ -50,331 +50,6 @@ export function createUserSidebar(user) {
 
 export function createUserMainContent() {
   return `
-    <style>
-      .stats-grid .stat-meta {
-        margin: 0;
-        color: #94a3b8;
-        font-size: 0.9rem;
-      }
-      .dashboard-status-message {
-        display: none;
-        margin: 1rem 0 0;
-        padding: 12px 16px;
-        border-radius: 12px;
-        font-size: 0.95rem;
-        background: #eef2ff;
-        color: #312e81;
-      }
-      .dashboard-status-message.error {
-        background: #fef2f2;
-        color: #991b1b;
-      }
-      .dashboard-status-message.success {
-        background: #ecfdf5;
-        color: #065f46;
-      }
-      .dashboard-hero {
-        display: grid;
-        grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
-        gap: 1.5rem;
-        margin-bottom: 2rem;
-        flex-wrap: wrap;
-      }
-      .dashboard-hero .hero-card {
-        border-radius: 26px;
-        background: linear-gradient(135deg, #4338ca, #7c3aed);
-        color: #fff;
-        padding: clamp(20px, 3vw, 36px);
-        position: relative;
-        overflow: hidden;
-        box-shadow: 0 24px 48px rgba(67, 56, 202, 0.4);
-      }
-      .dashboard-hero .hero-card::after {
-        content: '';
-        position: absolute;
-        inset: 0;
-        background: radial-gradient(circle at top right, rgba(255, 255, 255, 0.22), transparent 55%);
-        pointer-events: none;
-      }
-      .dashboard-hero .hero-card > * {
-        position: relative;
-        z-index: 1;
-      }
-      .dashboard-hero .hero-eyebrow {
-        font-size: 0.8rem;
-        text-transform: uppercase;
-        letter-spacing: 0.2em;
-        opacity: 0.8;
-      }
-      .dashboard-hero .hero-title {
-        margin: 0.3rem 0 0.5rem;
-        font-size: clamp(1.8rem, 3vw, 2.6rem);
-      }
-      .dashboard-hero .hero-meta {
-        display: flex;
-        gap: 1rem;
-        flex-wrap: wrap;
-        color: rgba(255, 255, 255, 0.8);
-        font-size: 0.95rem;
-      }
-      .dashboard-hero .hero-stat-group {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-        gap: 1rem;
-        margin-top: 1.5rem;
-      }
-      .dashboard-hero .mini-stat {
-        background: rgba(255, 255, 255, 0.14);
-        padding: 0.75rem 1rem;
-        border-radius: 16px;
-        backdrop-filter: blur(4px);
-      }
-      .dashboard-hero .mini-stat span {
-        display: block;
-        font-size: 0.8rem;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        opacity: 0.8;
-      }
-      .dashboard-hero .mini-stat strong {
-        font-size: 1.6rem;
-      }
-      .dashboard-hero .hero-side-card {
-        background: #fff;
-        border-radius: 22px;
-        padding: 1.75rem;
-        box-shadow: 0 20px 40px rgba(15, 23, 42, 0.12);
-        border: 1px solid #ede9fe;
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-      }
-      .layer-card {
-        background: #fff;
-        border-radius: 24px;
-        padding: 1.75rem;
-        box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
-        border: 1px solid #eff1f7;
-        margin-top: 1.75rem;
-      }
-      .layer-card-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: 1rem;
-        margin-bottom: 1.25rem;
-      }
-      .layer-eyebrow {
-        margin: 0;
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-        font-size: 0.8rem;
-        color: #a5b4fc;
-      }
-      .layer-card-header h4 {
-        margin: 0.25rem 0 0;
-      }
-      .insight-chip {
-        background: #eef2ff;
-        color: #4338ca;
-        padding: 0.35rem 0.9rem;
-        border-radius: 999px;
-        font-weight: 600;
-        font-size: 0.85rem;
-        white-space: nowrap;
-      }
-      .household-summary-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-        gap: 1rem;
-        margin-top: 1rem;
-      }
-      .summary-card {
-        border-radius: 18px;
-        padding: 1rem;
-        border: 1px solid #e2e8f0;
-        background: linear-gradient(120deg, #f8fafc, #ffffff);
-      }
-      .summary-card h4 {
-        margin: 0 0 0.25rem;
-        font-size: 1rem;
-      }
-      .summary-card p {
-        margin: 0;
-        color: #475569;
-      }
-      .participant-switcher {
-        display: flex;
-        gap: 0.75rem;
-        flex-wrap: wrap;
-        margin-bottom: 1.25rem;
-      }
-      .participant-chip {
-        border: 1px solid #e2e8f0;
-        border-radius: 16px;
-        padding: 0.75rem 1rem;
-        background: #f8fafc;
-        cursor: pointer;
-        display: flex;
-        flex-direction: column;
-        min-width: 180px;
-        transition: all 0.2s ease;
-      }
-      .participant-chip.active {
-        border-color: #7c3aed;
-        background: #ede9fe;
-        box-shadow: 0 10px 20px rgba(124, 58, 237, 0.15);
-      }
-      .participant-chip span {
-        font-size: 0.8rem;
-        color: #475569;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-      }
-      .participant-chip strong {
-        font-size: 1rem;
-        color: #0f172a;
-      }
-      .participant-chip .chip-meta {
-        font-size: 0.82rem;
-        color: #475569;
-      }
-      .participant-program-list {
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-      }
-      .program-row {
-        border: 1px solid #e2e8f0;
-        border-radius: 16px;
-        padding: 0.9rem 1rem;
-        display: flex;
-        justify-content: space-between;
-        gap: 1rem;
-        background: #fdfbff;
-      }
-      .program-row .program-info h5 {
-        margin: 0 0 0.25rem;
-        font-size: 1rem;
-      }
-      .program-row .program-info p {
-        margin: 0;
-        color: #64748b;
-      }
-      .program-status {
-        text-align: right;
-        min-width: 160px;
-      }
-      .status-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-        padding: 0.3rem 0.75rem;
-        border-radius: 999px;
-        font-size: 0.85rem;
-        font-weight: 600;
-      }
-      .status-attended {
-        background: #dcfce7;
-        color: #166534;
-      }
-      .status-upcoming {
-        background: #eef2ff;
-        color: #312e81;
-      }
-      .status-missed {
-        background: #fee2e2;
-        color: #991b1b;
-      }
-      .timeline-list {
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-      }
-      .timeline-item {
-        display: flex;
-        gap: 1rem;
-        align-items: flex-start;
-      }
-      .timeline-marker {
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        margin-top: 0.25rem;
-        background: #7c3aed;
-        flex-shrink: 0;
-      }
-      .timeline-content h5 {
-        margin: 0;
-        font-size: 1rem;
-      }
-      .timeline-content p {
-        margin: 0.15rem 0 0;
-        color: #475569;
-      }
-      .empty-state-card {
-        border: 1px dashed #cbd5f5;
-        border-radius: 16px;
-        padding: 1rem;
-        text-align: center;
-        color: #475569;
-        background: #f8fafc;
-      }
-      #user-settings-wrapper .setting-card {
-        background: #fff;
-        border-radius: 18px;
-        padding: 24px;
-        margin-top: 1.5rem;
-        box-shadow: 0 15px 45px rgba(15, 23, 42, 0.08);
-      }
-      #user-settings-wrapper .setting-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        margin-bottom: 1rem;
-      }
-      #user-settings-wrapper .setting-header h4 {
-        margin: 0;
-      }
-      #user-settings-wrapper .setting-icon {
-        font-size: 1.5rem;
-        color: #4f46e5;
-      }
-      #user-settings-wrapper .change-password-form .form-group {
-        margin-bottom: 12px;
-      }
-      #user-settings-wrapper .change-password-form input {
-        width: 100%;
-        padding: 10px 12px;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        background: #f8fafc;
-      }
-      #user-settings-wrapper .change-password-form button {
-        width: 100%;
-        margin-top: 10px;
-      }
-      #user-settings-wrapper .form-status {
-        display: none;
-        margin-top: 10px;
-        padding: 10px 14px;
-        border-radius: 8px;
-        font-size: 0.95rem;
-      }
-      #user-settings-wrapper .form-status.success {
-        display: block;
-        background: #ecfdf3;
-        color: #065f46;
-        border: 1px solid #6ee7b7;
-      }
-      #user-settings-wrapper .form-status.error {
-        display: block;
-        background: #fef2f2;
-        color: #b91c1c;
-        border: 1px solid #fecaca;
-      }
-    </style>
     <div id="dashboard-content" class="content-section">
       <div class="dashboard-hero">
         <div class="hero-card">
@@ -612,7 +287,30 @@ export function createUserDashboard(user) {
   
   return `
     <div class="admin-layout">
+      <button class="mobile-menu-toggle" id="mobileMenuToggle">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="6" x2="21" y2="6"></line>
+          <line x1="3" y1="12" x2="21" y2="12"></line>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+        </svg>
+      </button>
       ${sidebar}
+      <div class="sidebar-overlay" id="sidebarOverlay"></div>
+      <div class="mobile-nav-sheet" id="mobileNavSheet" aria-hidden="true">
+        <div class="mobile-nav-sheet-backdrop" id="mobileNavBackdrop"></div>
+        <div class="mobile-nav-sheet-panel" role="menu" aria-label="Navigasi Pengguna">
+          <div class="mobile-nav-sheet-header">
+            <div>
+              <p class="mobile-nav-eyebrow">Menu</p>
+              <h3 class="mobile-nav-title">Navigasi Pengguna</h3>
+            </div>
+            <button type="button" class="mobile-nav-close" id="mobileNavClose" aria-label="Tutup menu">
+              &times;
+            </button>
+          </div>
+          <div class="mobile-nav-sheet-body" id="mobileNavSheetBody"></div>
+        </div>
+      </div>
       
       <main class="main-content">
         <div class="content-header">
@@ -695,7 +393,86 @@ let userKIRProfileInstance = null;
 let userDashboardStatsPromise = null;
 let householdParticipationState = null;
 
+function setupUserMobileNav() {
+  const toggle = document.getElementById('mobileMenuToggle');
+  const sidebar = document.querySelector('.sidebar');
+  const sheet = document.getElementById('mobileNavSheet');
+  const sheetBody = document.getElementById('mobileNavSheetBody');
+  const closeBtn = document.getElementById('mobileNavClose');
+  const backdrop = document.getElementById('mobileNavBackdrop');
+
+  if (!toggle || !sidebar || !sheet || !sheetBody) return;
+
+  toggle.setAttribute('aria-expanded', 'false');
+  toggle.setAttribute('aria-controls', sheet.id);
+
+  const hydrateSheetNav = () => {
+    const navContent = sidebar.querySelector('.sidebar-nav');
+    if (!navContent) return;
+    const clonedNav = navContent.cloneNode(true);
+    sheetBody.innerHTML = '';
+    sheetBody.appendChild(clonedNav);
+  };
+
+  hydrateSheetNav();
+
+  const closeSheet = () => {
+    sheet.classList.remove('open');
+    sheet.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('sidebar-open');
+    toggle.setAttribute('aria-expanded', 'false');
+  };
+
+  const openSheet = () => {
+    sheet.classList.add('open');
+    sheet.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('sidebar-open');
+    toggle.setAttribute('aria-expanded', 'true');
+  };
+
+  toggle.addEventListener('click', () => {
+    const isOpen = sheet.classList.contains('open');
+    if (isOpen) {
+      closeSheet();
+    } else {
+      openSheet();
+    }
+  });
+
+  closeBtn?.addEventListener('click', closeSheet);
+  backdrop?.addEventListener('click', closeSheet);
+
+  sheetBody.addEventListener('click', (event) => {
+    const navItem = event.target.closest('.nav-item');
+    if (!navItem) return;
+    event.preventDefault();
+
+    const section = navItem.dataset.section;
+    if (section) {
+      const originalNav = sidebar.querySelector(`.nav-item[data-section="${section}"]`);
+      if (originalNav) {
+        originalNav.dispatchEvent(new Event('click', { bubbles: true }));
+      }
+    }
+
+    if (navItem.classList.contains('logout-nav-item')) {
+      document.getElementById('logoutBtn')?.click();
+    }
+
+    closeSheet();
+  });
+
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 768) {
+      closeSheet();
+    }
+  });
+
+  closeSheet();
+}
+
 export function setupUserDashboardFeatures(user) {
+  setupUserMobileNav();
   setupUserKIRProfileSection(user);
   initializeUserDashboardStats(user);
   setupParticipationSwitcher();

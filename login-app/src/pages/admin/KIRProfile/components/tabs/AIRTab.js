@@ -380,6 +380,12 @@ export class AIRTab extends BaseTab {
         gap: 0.75rem;
         margin: 1.5rem 0;
       }
+      .air-list-section {
+        overflow-x: auto;
+      }
+      .air-list-section table {
+        min-width: 600px;
+      }
       .wizard-tab {
         border: 1px solid #e2e8f0;
         border-radius: 14px;
@@ -425,6 +431,31 @@ export class AIRTab extends BaseTab {
         margin-top: 1rem;
         padding-top: 1.5rem;
         border-top: 1px solid #e2e8f0;
+      }
+      @media (max-width: 768px) {
+        .air-form-panel {
+          width: min(560px, 94vw);
+          padding: 1.25rem;
+          max-height: 92vh;
+        }
+        .air-list-header {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 0.75rem;
+        }
+        .air-wizard-tabs {
+          grid-template-columns: 1fr;
+        }
+      }
+      @media (max-width: 480px) {
+        .air-form-panel {
+          width: 95vw;
+          padding: 1rem;
+        }
+        .wizard-tab {
+          font-size: 0.9rem;
+          padding: 0.75rem;
+        }
       }
     `;
     document.head.appendChild(style);

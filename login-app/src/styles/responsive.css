@@ -1,0 +1,89 @@
+:root {
+  --bp-xs: 360px;
+  --bp-sm: 480px;
+  --bp-md: 768px;
+  --bp-lg: 1024px;
+  --bp-xl: 1280px;
+  --content-max: 1200px;
+  --gutter-lg: 2rem;
+  --gutter: 1.5rem;
+  --gutter-sm: 1rem;
+  --card-min: 260px;
+  --card-min-tight: 220px;
+  --shadow-soft: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.r-container {
+  width: min(var(--content-max), 100%);
+  margin: 0 auto;
+  padding-inline: var(--gutter-lg);
+}
+
+@media (max-width: var(--bp-md)) {
+  .r-container {
+    padding-inline: var(--gutter);
+  }
+}
+
+@media (max-width: var(--bp-sm)) {
+  .r-container {
+    padding-inline: var(--gutter-sm);
+  }
+}
+
+.r-grid {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(var(--card-min), 1fr));
+}
+
+.r-grid-tight {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(var(--card-min-tight), 1fr));
+}
+
+.r-stack {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: var(--bp-md)) {
+  .r-stack {
+    flex-direction: column;
+  }
+}
+
+.r-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.r-table-scroll table {
+  min-width: 640px;
+  width: 100%;
+}
+
+@media (max-width: var(--bp-sm)) {
+  .r-table-scroll table {
+    min-width: 560px;
+  }
+}
+
+.fluid-media {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.r-section {
+  padding: 1.5rem 0;
+}
+
+@media (max-width: var(--bp-md)) {
+  .r-section {
+    padding: 1rem 0;
+  }
+}

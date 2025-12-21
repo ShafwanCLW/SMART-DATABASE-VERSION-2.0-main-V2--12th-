@@ -75,7 +75,7 @@ function setupAddUserIdentityControls(modal) {
 // Admin dashboard creation functions
 export function createAdminSidebar(user) {
   return `
-    <aside class="sidebar">
+    <aside class="sidebar" id="adminSidebar" data-mobile-behavior="sheet">
       <div class="sidebar-header">
         <div class="admin-profile">
           <div class="profile-picture">
@@ -578,9 +578,9 @@ export function createAdminMainContent() {
 
     .dashboard-hero-layer {
       display: grid;
-      grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
-      gap: 24px;
-      margin-bottom: 32px;
+      grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr);
+      gap: clamp(1rem, 1vw + 0.75rem, 2rem);
+      margin-bottom: clamp(1.5rem, 2vw, 2.5rem);
       align-items: stretch;
     }
 
@@ -768,7 +768,9 @@ export function createAdminMainContent() {
     }
 
     .layered-stat-grid {
-      display: block;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: clamp(1rem, 1vw + 0.5rem, 1.75rem);
       margin-bottom: 30px;
     }
 
@@ -1063,8 +1065,8 @@ export function createAdminMainContent() {
     
     .dashboard-analytics {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
-      gap: 24px;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: clamp(1rem, 1vw + 0.5rem, 1.5rem);
       margin: 30px 0;
     }
     
@@ -1073,6 +1075,10 @@ export function createAdminMainContent() {
       border-radius: 16px;
       padding: 20px;
       box-shadow: 0 15px 35px rgba(15, 23, 42, 0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      min-height: 320px;
     }
     
     .chart-header {
@@ -1091,12 +1097,14 @@ export function createAdminMainContent() {
     
     .chart-body {
       position: relative;
-      min-height: 240px;
+      min-height: 260px;
+      flex: 1;
     }
     
     .chart-body canvas {
       width: 100%;
-      height: 240px;
+      height: 100%;
+      min-height: 220px;
     }
     
     .attendance-leaders {
@@ -1709,12 +1717,123 @@ export function createAdminMainContent() {
       justify-self: flex-start;
     }
 
+    @media (max-width: 1200px) {
+      .dashboard-hero-layer {
+        grid-template-columns: minmax(0, 1.2fr) minmax(260px, 1fr);
+      }
+      
+      .dashboard-analytics {
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      }
+    }
+
     @media (max-width: 1024px) {
-      .dashboard-hero-layer,
+      .dashboard-hero-layer {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        align-items: stretch;
+      }
+
       .hero-primary,
-      .hero-insight-card,
+      .hero-insight-card {
+        width: 100%;
+      }
+
+      .hero-primary {
+        order: 1;
+      }
+
+      .hero-insight-card {
+        margin-top: 0;
+        order: 2;
+      }
+
       .layer-card {
         border-radius: 20px;
+      }
+
+      .layered-stat-grid {
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      }
+
+      .dashboard-analytics {
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      }
+    }
+
+    @media (max-width: 768px) {
+      .hero-quick-stats {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      }
+      
+      .layer-card,
+      .hero-primary,
+      .hero-insight-card {
+        padding: 20px;
+      }
+      
+      .layer-card-header,
+      .hero-insight-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      
+      .family-viewer-header,
+      .chart-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+      }
+      
+      .chart-card {
+        padding: 16px;
+        min-height: 280px;
+      }
+      
+      .chart-body {
+        min-height: 200px;
+      }
+      
+      .chart-body canvas {
+        min-height: 200px;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .dashboard-hero-layer {
+        gap: 16px;
+      }
+      
+      .hero-primary {
+        padding: 20px;
+      }
+      
+      .hero-quick-stats {
+        grid-template-columns: 1fr;
+      }
+      
+      .layered-stat-grid,
+      .dashboard-analytics {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 674px) {
+      .dashboard-hero-layer {
+        display: flex;
+        flex-direction: column;
+      }
+      
+      .hero-primary {
+        order: 1;
+        width: 100%;
+      }
+      
+      .hero-insight-card {
+        order: 2;
+        width: 100%;
+        margin-top: 1rem;
       }
     }
     </style>
@@ -3658,6 +3777,22 @@ export function createAdminDashboard(user) {
         </svg>
       </button>
       ${sidebar}
+      <div class="sidebar-overlay" id="sidebarOverlay"></div>
+      <div class="mobile-nav-sheet" id="mobileNavSheet" aria-hidden="true">
+        <div class="mobile-nav-sheet-backdrop" id="mobileNavBackdrop"></div>
+        <div class="mobile-nav-sheet-panel" role="menu" aria-label="Navigasi Admin">
+          <div class="mobile-nav-sheet-header">
+            <div>
+              <p class="mobile-nav-eyebrow">Menu</p>
+              <h3 class="mobile-nav-title">Navigasi Admin</h3>
+            </div>
+            <button type="button" class="mobile-nav-close" id="mobileNavClose" aria-label="Tutup menu">
+              &times;
+            </button>
+          </div>
+          <div class="mobile-nav-sheet-body" id="mobileNavSheetBody"></div>
+        </div>
+      </div>
       
       <main class="main-content">
         <div class="content-header">
@@ -3669,6 +3804,90 @@ export function createAdminDashboard(user) {
       </main>
     </div>
   `;
+}
+
+export function setupAdminMobileNav() {
+  const toggle = document.getElementById('mobileMenuToggle');
+  const sidebar = document.getElementById('adminSidebar');
+  const sheet = document.getElementById('mobileNavSheet');
+  const sheetBody = document.getElementById('mobileNavSheetBody');
+  const closeBtn = document.getElementById('mobileNavClose');
+  const backdrop = document.getElementById('mobileNavBackdrop');
+
+  if (!toggle || !sidebar || !sheet || !sheetBody || toggle.dataset.mobileNavBound === 'true') return;
+
+  toggle.dataset.mobileNavBound = 'true';
+  toggle.setAttribute('aria-expanded', 'false');
+  toggle.setAttribute('aria-controls', sheet.id);
+
+  const hydrateMobileNav = () => {
+    if (!sidebar) return;
+    const navContent = sidebar.querySelector('.sidebar-nav');
+    if (!navContent) return;
+    const clonedNav = navContent.cloneNode(true);
+    const logoutClone = clonedNav.querySelector('#logoutBtn');
+    if (logoutClone) {
+      logoutClone.id = 'logoutBtnMobile';
+    }
+    sheetBody.innerHTML = '';
+    sheetBody.appendChild(clonedNav);
+  };
+
+  hydrateMobileNav();
+
+  const closeSheet = () => {
+    sheet.classList.remove('open');
+    sheet.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('sidebar-open');
+    toggle.setAttribute('aria-expanded', 'false');
+  };
+
+  const openSheet = () => {
+    sheet.classList.add('open');
+    sheet.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('sidebar-open');
+    toggle.setAttribute('aria-expanded', 'true');
+  };
+
+  toggle.addEventListener('click', () => {
+    const isOpen = sheet.classList.contains('open');
+    if (isOpen) {
+      closeSheet();
+    } else {
+      openSheet();
+    }
+  });
+
+  closeBtn?.addEventListener('click', closeSheet);
+  backdrop?.addEventListener('click', closeSheet);
+
+  sheetBody.addEventListener('click', (event) => {
+    const navItem = event.target.closest('.nav-item, .nav-subitem');
+    if (!navItem) return;
+    event.preventDefault();
+
+    const section = navItem.dataset.section;
+    if (section) {
+      const originalNav = sidebar.querySelector(`.nav-item[data-section="${section}"], .nav-subitem[data-section="${section}"]`);
+      if (originalNav) {
+        originalNav.dispatchEvent(new Event('click', { bubbles: true }));
+      }
+    }
+
+    if (navItem.classList.contains('logout-nav-item')) {
+      document.getElementById('logoutBtn')?.click();
+    }
+
+    closeSheet();
+  });
+
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 768) {
+      closeSheet();
+    }
+  });
+
+  closeSheet();
 }
 
 let dashboardStatsLoadingPromise = null;

@@ -93,7 +93,7 @@ export function setupNavigationListeners(onLogout) {
   const mobileMenuToggle = document.getElementById('mobileMenuToggle');
   const sidebar = document.querySelector('.sidebar');
   
-  if (mobileMenuToggle && sidebar) {
+  if (mobileMenuToggle && sidebar && sidebar.dataset.mobileBehavior !== 'sheet') {
     mobileMenuToggle.addEventListener('click', () => {
       sidebar.classList.toggle('mobile-open');
     });
