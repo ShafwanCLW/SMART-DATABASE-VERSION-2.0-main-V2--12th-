@@ -9323,3 +9323,19 @@ body.sidebar-open {
     flex-direction: row;
   }
 }
+
+
+.app-footer {
+  margin-top: 2.5rem;
+  padding: 1rem 1.5rem;
+  text-align: center;
+  color: #64748b;
+  font-size: 0.9rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+@media (max-width: 768px) {
+  .app-footer {
+    padding: 1rem;
+  }
+}

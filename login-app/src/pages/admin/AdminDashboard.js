@@ -3801,6 +3801,9 @@ export function createAdminDashboard(user) {
         </div>
         
         ${mainContent}
+        <footer class="app-footer">
+          Developed by SBZ Technology, Contact us on Whatsapp for more details : +60178361213
+        </footer>
       </main>
     </div>
   `;
